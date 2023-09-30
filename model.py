@@ -56,7 +56,7 @@ class ACPClassifier(Model):
     return embeddings
 
   def _call_sequential_retention(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.retention_layer(tf.squeeze(x, 0), tf.squeeze(x, 0), tf.squeeze(x, 0)), embeddings)
+    x = tf.vectorized_map(lambda x: self.retention_layer(x, x, x), embeddings)
     return x
 
   def _call_sequential_norm(self, embeddings):
