@@ -78,7 +78,7 @@ class ACPClassifier(Model):
     return embeddings
   
   def _call_parallel_retention(self, embeddings):
-    Q, K, V = [f(z, z, z) for f, z in zip(self.layers.values(), embeddings)]
+    Q, K, V = [f(z, z, z) for f, z in zip(self.retention_layers.values(), embeddings)]
     _, _, d = Q.shape
     x = Q@tf.transpose(K, perm=[0, 2, 1])
     x /= d**0.5

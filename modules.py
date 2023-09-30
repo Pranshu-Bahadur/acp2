@@ -103,7 +103,7 @@ class Retention(Layer):
                 }
         _layer_names = ['Q', 'K', 'V']
         _layer = Dense(dim, **_dense_kwargs)
-        self.layers = dict.fromkeys(_layer_names, _layer)
+        self.r_layers = dict.fromkeys(_layer_names, _layer)
 
         _indices = torch.arange(seq_len, dtype=torch.float)
         _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -111,7 +111,7 @@ class Retention(Layer):
         self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
 
     def call(self, x):
-        Q, K, V = [f(z) for f, z in zip(self.layers.values(), x)]
+        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
         _, _, d = Q.shape
         x = Q@tf.transpose(K, perm=[0, 2, 1])
         x /= d**0.5
@@ -130,7 +130,7 @@ class RecurrentRetention(Retention):
         self.seq_len=seq_len
 
     def call(self, x):
-        Q, K, V = [f(z) for f, z in zip(self.layers.values(), x)]
+        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
         _, _, d = Q.shape
         s = [0 for i in range(self.seq_len)]
         for t in range(1, self.seq_len):
