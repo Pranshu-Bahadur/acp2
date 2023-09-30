@@ -37,10 +37,11 @@ class ACPClassifier(Model):
     }
 
     print('embeddings initialized')
-
+    """
     self.retention_layer = MultiScaleRetention(dim,
                                                hdim=dim//num_heads,
-                                               seq_len=seq_len)
+                                            seq_len=seq_len)
+    """
     retention_kwargs = {
             "dim" : dim,
             "hdim" :dim//num_heads,
