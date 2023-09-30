@@ -80,7 +80,7 @@ class ACPClassifier(Model):
         x = self.fc(self.layer_norm(tf.reduce_mean(x, 0)))
     else:
         x = embeddings[-1]
-        x = layer_norm(x)
+        x = self.layer_norm(x)
         x = self.retention_layer(x, x, x)
         x = self.ffn(x)
         x = self.fc(x)
