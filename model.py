@@ -88,6 +88,7 @@ class ACPClassifier(Model):
     x = x*D
     x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
     x = x@V
+    print(x.shape)
     return x
 
 
@@ -116,16 +117,8 @@ class ACPClassifier(Model):
 
     """
     embeddings = self._call_embeddings(x)
-    if training:
-        x = self._call_parallel_retention(embeddings)
-        x = self.layer_norm(x)
-        x = self.ffn(x)
-        x = self.fc(x)
-        return x
-    else :
-        x = self.retention_layers['V'](x, x, x)
-        x = self.layer_norm(x)
-        x = self.ffn(x)
-        x = self.fc(x)
-        return x
-
+    x = self._call_parallel_retention(embeddings)
+    x = self.layer_norm(x)
+    x = self.ffn(x)
+    x = self.fc(x)
+    return x
