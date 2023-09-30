@@ -121,7 +121,7 @@ class ACPClassifier(Model):
     x = self._call_sequential_retention(embeddings)
     x = self._call_sequential_norm_ffn(x)
     x = tf.split(x, 3, 0)
-    x = [tf.squeeze(z) for z in x]
+    x = [tf.squeeze(z, 0) for z in x]
     x = self._call_parallel_retention(x)
     x = self.spreada(x)
     x = self.fc(x)
