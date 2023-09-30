@@ -18,19 +18,17 @@ class ACPClassifier(Model):
                dim,
                seq_len,
                num_heads,
-               vocabs,
                tokenizer,
                **kwargs):
     super(ACPClassifier, self).__init__()
 
     self.dim = dim
     self.seq_len = seq_len
-    self.tokenizer = tokenizer
-    self.vocabs = vocabs
+    self.tokenizers = tokenizer
     
     self.embedding_layers = {
         k:
-        PositionalEmbedding(len(tokenizer.get_vocabulary()), dim)
+        PositionalEmbedding(len(tokenizers.get_vocabulary()), dim)
         for k,v in self.vocabs.items()
     }
 
@@ -53,7 +51,7 @@ class ACPClassifier(Model):
   def _call_embeddings(self, x):
     embeddings = []
     for k, v in self.embedding_layers.items():
-      self.tokenizer.set_vocabulary(self.vocabs[k])
+      #self.tokenizer.set_vocabulary(self.vocabs[k])
       _input_ids = self.tokenizer(x)
       embedding = v(_input_ids)
       embeddings.append(embedding)
