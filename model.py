@@ -40,7 +40,7 @@ class ACPClassifier(Model):
                                                hdim=dim//num_heads,
                                                seq_len=seq_len)
     self.layer_norm = LayerNormalization()
-    self.ffn = FeedForward(dim, dim*2, dropout_rate=0.2)
+    self.ffn = FeedForward(dim, dim, dropout_rate=0.2)
     self.fc = Sequential([
         #AdaptiveAveragePooling1D(self.seq_len),
         Flatten(),
