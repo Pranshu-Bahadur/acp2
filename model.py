@@ -27,13 +27,14 @@ class ACPClassifier(Model):
     self.seq_len = seq_len
     self.tokenizer = tokenizer
     self.vocabs = vocabs
-    _len = list(vocabs.keys())[-1]
+    
     self.embedding_layers = {
         k:
-        PositionalEmbedding(len(tokenizer.get_vocabulary()), dim,
-                  )
+        PositionalEmbedding(len(vocabs[k]), dim)
         for k,v in self.vocabs.items()
     }
+
+    print('embeddings initialized')
 
     self.retention_layer = MultiScaleRetention(dim,
                                                hdim=dim//num_heads,
@@ -46,6 +47,8 @@ class ACPClassifier(Model):
         Dense(1, activation='sigmoid'),
         Dropout(0.2)
                           ])
+
+
 
   def _call_embeddings(self, x):
     embeddings = []
