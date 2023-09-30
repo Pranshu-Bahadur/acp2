@@ -153,8 +153,7 @@ class MultiScaleRetention(Layer):
         self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
         self.gn = GroupNormalization()
         self.wg = Sequential([
-            Dense(dims, use_bias=False, **kwargs),
-            GELU()
+            Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])
         self.wo = Dense(dims, use_bias=False, **kwargs)
 
