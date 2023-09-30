@@ -135,7 +135,7 @@ class RecurrentRetention(Retention):
         s = [0 for i in range(self.seq_len)]
         for t in range(1, self.seq_len):
           s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
-        s[0] = s[1]
+        #s[0] = 0
         S = tf.convert_to_tensor(s)
         S = tf.reshape(tf.math.reduce_sum(S, -1), [-1, self.seq_len])
         x = tf.multiply(tf.transpose(S), Q)
@@ -151,7 +151,7 @@ class MultiScaleRetention(Layer):
         self.dim = dim
         self.hdim = hdim
         self.heads = [RecurrentRetention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
-        self.gn = GroupNormalization(1)
+        self.gn = GroupNormalization()
         self.wg = Sequential([
             Dense(dims, use_bias=False, **kwargs),
             ReLU()
