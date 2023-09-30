@@ -159,8 +159,8 @@ class MultiScaleRetention(Layer):
 
     def call(self, x):
         W = self.wg(x)
-        x = tf.split(x, self.hdim, -1)
-        x = tf.concat([self.heads[i](x[i], x[i], x[i]) for i in range(self.heads)], -1)
+        x = tf.split(x, self.hdim, 2)
+        x = tf.concat([self.heads[i]([x[i], x[i], x[i]]) for i in range(self.heads)], -1)
         Y = self.gn(x)
         x = self.wo(W * Y)
         return x
