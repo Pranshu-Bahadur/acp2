@@ -46,9 +46,6 @@ class ACPClassifier(Model):
         Flatten(),
         Dense(1, activation='sigmoid'),
                           ])
-
-
-
   def _call_embeddings(self, x):
     embeddings = []
     for k, v in self.embedding_layers.items():
@@ -58,13 +55,23 @@ class ACPClassifier(Model):
       embeddings.append(embedding)
     return embeddings
 
+  def _call_sequential_retention(self, embeddings):
+    x = tf.vectorized_map(lambda x: self.retention_layer(x, x, x), embeddings)
+    return x
+
+  def _call_sequential_norm(self, embeddings):
+    x = tf.vectorized_map(lambda x: self.layer_norm(x), embeddings)
+    return x
+
+  def _call_sequential_ffn(self, embeddings):
+    x = tf.vectorized_map(lambda x: self.ffn(x), embeddings)
+    return x
 
   def call(self, x):
     embeddings = self._call_embeddings(x)
-    for embedding in embeddings:
-      x = self.layer_norm(embedding)
-      x = self.retention_layer(x, x, x) + x
-      x = self.ffn(self.layer_norm(x)) + x
-      x = self.layer_norm(x)
-    x = self.fc(x)
+    embeddings = tf.concat(embeddings, 0)
+    x = self._call_sequential_norm(embeddings)
+    x = self._call_sequential_retention(x)
+    x = self._call_sequential_ffn(x)
+    x = self.fc(self.layer_norm(tf.reduce_mean(x)))
     return x
