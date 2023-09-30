@@ -62,7 +62,7 @@ class ACPClassifier(Model):
                           ])
 
     _indices = torch.arange(seq_len, dtype=torch.float)
-    _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
+    _decay_factors = 0.96875 ** (_indices.unsqueeze(1) - _indices)
     D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
     self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
 
