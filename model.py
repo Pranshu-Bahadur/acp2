@@ -57,7 +57,7 @@ class ACPClassifier(Model):
     self.spreada = Sequential([
         LayerNormalization(),
         FeedForward(dim, dim, dropout_rate=0.1)
-        )]
+        ])
     self.fc = Sequential([
         AdaptiveAveragePooling1D(self.seq_len),
         Flatten(),
