@@ -49,7 +49,7 @@ class ACPClassifier(Model):
   def _call_embeddings(self, x):
     embeddings = []
     for k, v in self.embedding_layers.items():
-      self.tokenizer.set_vocabulary(self.vocabs[k])
+      self.tokenizer.set_vocabulary(self.vocabs[-1])
       _input_ids = self.tokenizer(x)
       embedding = v(_input_ids)
       embeddings.append(embedding)
@@ -67,12 +67,19 @@ class ACPClassifier(Model):
     x = tf.vectorized_map(lambda x: self.ffn(x), embeddings)
     return x
 
-  def call(self, x):
+  def call(self, x, training=True):
     embeddings = self._call_embeddings(x)
-    embeddings = tf.stack(embeddings)
-    x = self._call_sequential_norm(embeddings)
-    print(embeddings.shape)
-    x = self._call_sequential_retention(x)
-    x = self._call_sequential_ffn(x)
-    x = self.fc(self.layer_norm(tf.reduce_mean(x, 0)))
+
+    if training:
+        embeddings = tf.stack(embeddings)
+        x = self._call_sequential_norm(embeddings)
+        x = self._call_sequential_retention(x)
+        x = self._call_sequential_ffn(x)
+        x = self.fc(self.layer_norm(tf.reduce_mean(x, 0)))
+    else:
+        x = embeddings[-1]
+        x = layer_norm(x)
+        x = self.retention_layer(x, x, x)
+        x = self.ffn(x)
+        x = self.fc(x)
     return x
