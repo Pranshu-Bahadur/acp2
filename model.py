@@ -18,13 +18,15 @@ class ACPClassifier(Model):
                dim,
                seq_len,
                num_heads,
+               vocabs,
                tokenizer,
                **kwargs):
     super(ACPClassifier, self).__init__()
 
     self.dim = dim
     self.seq_len = seq_len
-    self.tokenizers = tokenizer
+    self.vocabs = vocabs
+    self.tokenizer = tokenizer
     
     self.embedding_layers = {
         k:
