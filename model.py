@@ -49,6 +49,7 @@ class ACPClassifier(Model):
             }
 
     _layer_names = ['Q', 'K', 'V']
+    self.retention_layer = MultiScaleRetention(**retention_kwargs)
 
     self.retention_layers = {k: 
                              MultiScaleRetention(**retention_kwargs)
