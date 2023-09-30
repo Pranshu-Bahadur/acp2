@@ -150,11 +150,11 @@ class MultiScaleRetention(Layer):
         gamma = gamma.numpy().tolist()
         self.dim = dim
         self.hdim = hdim
-        self.heads = [RecurrentRetention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
+        self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
         self.gn = GroupNormalization()
         self.wg = Sequential([
             Dense(dims, use_bias=False, **kwargs),
-            ReLU()
+            GELU()
         ])
         self.wo = Dense(dims, use_bias=False, **kwargs)
 

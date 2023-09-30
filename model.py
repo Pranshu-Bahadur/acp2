@@ -104,13 +104,7 @@ class ACPClassifier(Model):
     return x
 
   def call(self, x, training=False):
-    embeddings = self._call_embeddings(x)
-    x = self._call_parallel_retention(embeddings)
-    x = self.layer_norm(x)
-    x = self.ffn(x)
-    x = self.fc(x)
     """
-
     if training:
         embeddings = tf.stack(embeddings)
         x = self._call_sequential_norm(embeddings)
@@ -121,4 +115,17 @@ class ACPClassifier(Model):
         x = embeddings[-1]
 
     """
-    return x
+    embeddings = self._call_embeddings(x)
+    if training:
+        x = self._call_parallel_retention(embeddings)
+        x = self.layer_norm(x)
+        x = self.ffn(x)
+        x = self.fc(x)
+        return x
+    else :
+        x = self.retention_layers['V'](x)
+        x = self.layer_norm(x)
+        x = self.ffn(x)
+        x = self.fc(x)
+        return x
+
