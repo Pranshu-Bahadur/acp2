@@ -64,7 +64,7 @@ class ACPClassifier(Model):
     embeddings = self._call_embeddings(x)
     for embedding in embeddings:
       x = self.layer_norm(embedding)
-      x = self.retention_layer(x) + x
+      x = self.retention_layer(x, x, x) + x
       x = self.ffn(self.layer_norm(x)) + x
       x = self.layer_norm(x)
     x = self.fc(x)

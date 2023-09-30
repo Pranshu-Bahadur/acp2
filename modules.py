@@ -141,6 +141,7 @@ class RecurrentRetention(Retention):
         x = tf.multiply(tf.transpose(S), Q)
         return x
 
+
 class MultiScaleRetention(Layer):
     def __init__(self, dim, hdim=128, seq_len=50, **kwargs):
         super(MultiScaleRetention, self).__init__()
@@ -149,7 +150,7 @@ class MultiScaleRetention(Layer):
         gamma = gamma.numpy().tolist()
         self.dim = dim
         self.hdim = hdim
-        self.heads = [RecurrentRetention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
+        self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
         self.gn = GroupNormalization(1)
         self.wg = Sequential([
             Dense(dims, use_bias=False, **kwargs),
@@ -157,10 +158,12 @@ class MultiScaleRetention(Layer):
         ])
         self.wo = Dense(dims, use_bias=False, **kwargs)
 
-    def call(self, x):
+    def call(self, x, k, v):
         W = self.wg(x)
-        x = tf.split(x, self.hdim, 2)
-        x = tf.concat([self.heads[i]([x[i], x[i], x[i]]) for i in range(self.heads)], -1)
+        q = tf.split(x, self.dim//self.hdim, 2)
+        k = tf.split(k, self.dim//self.hdim, 2)
+        v = tf.split(v, self.dim//self.hdim, 2)
+        x = tf.concat([headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)], -1)
         Y = self.gn(x)
         x = self.wo(W * Y)
         return x
