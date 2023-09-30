@@ -53,7 +53,7 @@ class ACPClassifier(Model):
   def _call_embeddings(self, x):
     embeddings = []
     for k, v in self.embedding_layers.items():
-      #self.tokenizer.set_vocabulary(self.vocabs[k])
+      self.tokenizer.set_vocabulary(self.vocabs[k])
       _input_ids = self.tokenizer(x)
       embedding = v(_input_ids)
       embeddings.append(embedding)
