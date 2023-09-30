@@ -15,9 +15,9 @@ from itertools import product
 
 class ACPClassifier(Model):
   def __init__(self,
-               dim: int = 32,
-               seq_len=50,
-               num_heads=2,
+               dim,
+               seq_len,
+               num_heads,
                vocabs,
                tokenizer,
                **kwargs):
