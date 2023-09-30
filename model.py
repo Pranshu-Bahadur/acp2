@@ -54,8 +54,10 @@ class ACPClassifier(Model):
                              MultiScaleRetention(**retention_kwargs)
                              for k in _layer_names
                              }
-    self.layer_norm = LayerNormalization()
-    self.ffn = FeedForward(dim, dim, dropout_rate=0.1)
+    self.spreada = Sequential([
+        LayerNormalization(),
+        FeedForward(dim, dim, dropout_rate=0.1)
+        )]
     self.fc = Sequential([
         AdaptiveAveragePooling1D(self.seq_len),
         Flatten(),
@@ -96,13 +98,10 @@ class ACPClassifier(Model):
     x = tf.vectorized_map(lambda x: self.retention_layer(x, x, x), embeddings)
     return x
 
-  def _call_sequential_norm(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.layer_norm(x), embeddings)
+  def _call_sequential_norm_ffn(self, embeddings):
+    x = tf.vectorized_map(lambda x: self.spreada(x), embeddings)
     return x
 
-  def _call_sequential_ffn(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.ffn(x), embeddings)
-    return x
 
   def call(self, x, training=False):
     """
@@ -118,7 +117,8 @@ class ACPClassifier(Model):
     """
     embeddings = self._call_embeddings(x)
     x = self._call_parallel_retention(embeddings)
-    x = self.layer_norm(x)
-    x = self.ffn(x)
-    x = self.fc(x)
+    x = self.spreada(x)
+    x1 = self._call_sequential_retention(embeddings)
+    x1 = self._call_sequential_norm_ffn(x)
+    x = self.fc(tf.divide(x1 / x))
     return x
