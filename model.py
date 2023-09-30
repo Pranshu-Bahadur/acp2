@@ -27,7 +27,9 @@ class ACPClassifier(Model):
     self.seq_len = seq_len
     self.vocabs = vocabs
     self.tokenizer = tokenizer
-    
+
+    self.tokenizer.set_vocabulary(self.vocabs[-1])
+
     self.embedding_layers = {
         k:
         PositionalEmbedding(len(tokenizer.get_vocabulary()), dim)
