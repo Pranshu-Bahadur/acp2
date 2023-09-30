@@ -18,8 +18,8 @@ class ACPClassifier(Model):
                dim: int = 32,
                seq_len=50,
                num_heads=2,
-               vocabs = vocabs,
-               tokenizer=tokenizer
+               vocabs,
+               tokenizer,
                **kwargs):
     super(ACPClassifier, self).__init__()
 
