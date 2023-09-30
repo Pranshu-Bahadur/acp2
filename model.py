@@ -123,7 +123,7 @@ class ACPClassifier(Model):
         x = self.fc(x)
         return x
     else :
-        x = self.retention_layers['V'](x)
+        x = self.retention_layers['V'](x, x, x)
         x = self.layer_norm(x)
         x = self.ffn(x)
         x = self.fc(x)
