@@ -44,7 +44,6 @@ class PositionalEmbedding(tf.keras.layers.Layer):
   def call(self, input_ids):
     length = tf.shape(input_ids)[1]
     x = self.embedding(input_ids)
-    print('here?')
     input_ids = tf.cast(input_ids, tf.int32)
     encodings = x + (self.pos_encoding[tf.newaxis, :length, :])
 
