@@ -122,5 +122,7 @@ class ACPClassifier(Model):
     embeddings = tf.stack(embeddings)
     x1 = self._call_sequential_retention(embeddings)
     x1 = self._call_sequential_norm_ffn(x1)
-    x = self.fc(tf.divide(x1, x, 1))
+    print(x.shape, x1.shape)
+    x = self.fc(x1*x)
+
     return x
