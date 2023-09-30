@@ -42,10 +42,9 @@ class ACPClassifier(Model):
     self.layer_norm = LayerNormalization()
     self.ffn = FeedForward(dim, dim, dropout_rate=0.1)
     self.fc = Sequential([
-        AdaptiveAveragePooling1D(self.seq_len),
+        AdaptiveAveragePooling1D(self.dim),
         Flatten(),
         Dense(1, activation='sigmoid'),
-        Dropout(0.1)
                           ])
 
 
