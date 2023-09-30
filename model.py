@@ -70,8 +70,8 @@ class ACPClassifier(Model):
   def call(self, x):
     embeddings = self._call_embeddings(x)
     embeddings = tf.stack(embeddings)
-    print(embeddings.shape)
     x = self._call_sequential_norm(embeddings)
+    print(embeddings.shape)
     x = self._call_sequential_retention(x)
     x = self._call_sequential_ffn(x)
     x = self.fc(self.layer_norm(tf.reduce_mean(x)))
