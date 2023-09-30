@@ -67,7 +67,7 @@ class ACPClassifier(Model):
     x = tf.vectorized_map(lambda x: self.ffn(x), embeddings)
     return x
 
-  def call(self, x, training=True):
+  def call(self, x, training=False):
     embeddings = self._call_embeddings(x)
 
     if training:
