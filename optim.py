@@ -12,13 +12,13 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [64, 128, 256],
+    dims : list = [64, 128, 256, 512],
     nheads : list = [4],
                  ):
       super().__init__()
       self.dims = dims
       self.nheads=nheads
-      self.ngrams = [5, 6, 7, 8, 9, 10]
+      self.ngrams = [4, 5, 6, 7]
       self.seq_len = 50
 
       i = random.randrange(len(self.ngrams))
@@ -68,14 +68,15 @@ class ACP2HyperModel(kt.HyperModel):
 
         i = random.randrange(len(retention_layers))
 
-        retention_kwargs = {
-                'retention_layer': retention_layers[i],
+        retention_kwargs = [{
+                'retention_layer': retention_layers[random.randrange(len(retention_layers))],
                 'dim' : dim,
                 'hdim' : 32,
                 'seq_len': seq_len
-                }
+                }for i in range(n_layers)]
+
         self.msr_layer = Sequential([
-          RetentionBlock(**retention_kwargs)
+          RetentionBlock(**retention_kwargs[i])
           for i in range(n_layers)
           ])
 

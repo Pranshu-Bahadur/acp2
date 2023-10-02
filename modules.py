@@ -131,12 +131,11 @@ class RecurrentRetention(Retention):
         self.seq_len=seq_len
 
     def call(self, x):
-      x = [x, x, x]
       Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
       s = [0 for i in range(self.seq_len)]
       for t in range(1, self.seq_len):
         s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
-      #s[0] = 0
+      s[0] = s[-1]
       S = tf.convert_to_tensor(s)
       S = tf.reshape(tf.math.reduce_sum(S, -1), [-1, self.seq_len])
       x = tf.multiply(tf.transpose(S), Q)
@@ -148,8 +147,7 @@ class ChunkwiseRetention(Retention):
     self.gamma = tf.cast(gamma, tf.float32)
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 5
-
+    self.B = 2
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
