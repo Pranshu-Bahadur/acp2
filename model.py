@@ -12,6 +12,7 @@ from tensorflow.keras.layers import Embedding, Dense, Flatten, Dropout, ReLU, La
 from tensorflow_addons.layers import AdaptiveAveragePooling1D
 import numpy
 from itertools import product
+from functools import reduce
 
 class ACPClassifier(Model):
   def __init__(self,
@@ -49,18 +50,24 @@ class ACPClassifier(Model):
             }
 
     _layer_names = ['Q', 'K', 'V']
-    self.retention_layer = MultiScaleRetention(**retention_kwargs)
+    self.retention_layer = Sequential([
+      MultiScaleRetention(**retention_kwargs),
+      LayerNormalization(),
+      FeedForward(dim, dim, dropout_rate=0.1)
+      ])
 
-    self.retention_layers = {k: 
-                             MultiScaleRetention(**retention_kwargs)
-                             for k in _layer_names
-                             }
-    self.spreada = Sequential([
+    self.retention_layers = {
+      k: 
+      Sequential([
+        MultiScaleRetention(**retention_kwargs),
         LayerNormalization(),
-        FeedForward(dim, dim, dropout_rate=0.1)
+        FeedForward(dim, dim, dropout_rate=0.1),
         ])
+        for k in _layer_names
+      }
+    
     self.fc = Sequential([
-        AdaptiveAveragePooling1D(self.seq_len),
+        AdaptiveAveragePooling1D(self.seq_len//2),
         Flatten(),
         Dense(1, activation='sigmoid')
                           ])
@@ -69,8 +76,6 @@ class ACPClassifier(Model):
     _decay_factors = 0.96875 ** (_indices.unsqueeze(1) - _indices)
     D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
     self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
-
-
   
   def _call_embeddings(self, x):
     embeddings = []
@@ -82,7 +87,7 @@ class ACPClassifier(Model):
     return embeddings
   
   def _call_parallel_retention(self, embeddings):
-    Q, K, V = [f(z, z, z) for f, z in zip(self.retention_layers.values(), embeddings)]
+    Q, K, V = [f(z) for f, z in zip(self.retention_layers.values(), embeddings)]
     _, _, d = Q.shape
     x = Q@tf.transpose(K, perm=[0, 2, 1])
     x /= d**0.5
@@ -96,11 +101,7 @@ class ACPClassifier(Model):
 
 
   def _call_sequential_retention(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.retention_layer(x, x, x), embeddings)
-    return x
-
-  def _call_sequential_norm_ffn(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.spreada(x), embeddings)
+    x = tf.vectorized_map(lambda x: self.retention_layer(x), embeddings)
     return x
 
 
@@ -119,10 +120,8 @@ class ACPClassifier(Model):
     embeddings = self._call_embeddings(x)
     embeddings = tf.stack(embeddings)
     x = self._call_sequential_retention(embeddings)
-    x = self._call_sequential_norm_ffn(x)
     x = tf.split(x, 3, 0)
     x = [tf.squeeze(z, 0) for z in x]
     x = self._call_parallel_retention(x)
-    x = self.spreada(x)
     x = self.fc(x)
     return x

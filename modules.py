@@ -35,7 +35,7 @@ class PositionalEmbedding(tf.keras.layers.Layer):
   def __init__(self, vocab_size, d_model, seq_len=50):
     super().__init__()
     self.d_model = d_model
-    self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True, trainable=False)
+    self.embedding = tf.keras.layers.Embedding(vocab_size, d_model, mask_zero=True, trainable=True)
     self.pos_encoding = PE(seq_len, dim=d_model)
 
   def compute_mask(self, *args, **kwargs):
@@ -144,25 +144,26 @@ class RecurrentRetention(Retention):
 
 class MultiScaleRetention(Layer):
     def __init__(self, dim, hdim=128, seq_len=50, **kwargs):
-        super(MultiScaleRetention, self).__init__()
-        dims = dim
-        gamma = 1 - (2 ** (-5 - torch.arange(0, hdim)))
-        gamma = gamma.numpy().tolist()
-        self.dim = dim
-        self.hdim = hdim
-        self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
-        self.gn = GroupNormalization()
-        self.wg = Sequential([
+      super(MultiScaleRetention, self).__init__()
+      dims = dim
+      gamma = 1 - (2 ** (-5 - torch.arange(0, hdim)))
+      gamma = gamma.numpy().tolist()
+      self.dim = dim
+      self.hdim = hdim
+      self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
+      self.gn = GroupNormalization()
+      self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])
-        self.wo = Dense(dims, use_bias=False, **kwargs)
+      self.wo = Dense(dims, use_bias=False, **kwargs)
 
-    def call(self, x, k, v):
-        W = self.wg(x)
-        q = tf.split(x, self.dim//self.hdim, 2)
-        k = tf.split(k, self.dim//self.hdim, 2)
-        v = tf.split(v, self.dim//self.hdim, 2)
-        x = tf.concat([headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)], -1)
-        Y = self.gn(x)
-        x = self.wo(W * Y)
-        return x
+    def call(self, x):
+      x, k, v = x, x, x
+      W = self.wg(x)
+      q = tf.split(x, self.dim//self.hdim, 2)
+      k = tf.split(k, self.dim//self.hdim, 2)
+      v = tf.split(v, self.dim//self.hdim, 2)
+      x = tf.concat([headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)], -1)
+      Y = self.gn(x)
+      x = self.wo(W * Y)
+      return x
