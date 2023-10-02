@@ -130,16 +130,16 @@ class RecurrentRetention(Retention):
         self.seq_len=seq_len
 
     def call(self, x):
-        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-        _, _, d = Q.shape
-        s = [0 for i in range(self.seq_len)]
-        for t in range(1, self.seq_len):
-          s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
-        #s[0] = 0
-        S = tf.convert_to_tensor(s)
-        S = tf.reshape(tf.math.reduce_sum(S, -1), [-1, self.seq_len])
-        x = tf.multiply(tf.transpose(S), Q)
-        return x
+      x = [x, x, x]
+      Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+      s = [0 for i in range(self.seq_len)]
+      for t in range(1, self.seq_len):
+        s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
+      #s[0] = 0
+      S = tf.convert_to_tensor(s)
+      S = tf.reshape(tf.math.reduce_sum(S, -1), [-1, self.seq_len])
+      x = tf.multiply(tf.transpose(S), Q)
+      return x
 
 class ChunkwiseRetention(Retention):
   def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
@@ -208,14 +208,15 @@ class MultiScaleRetention(Layer):
       return x
 
 class RetentionBlock(Layer):
-    def __init__(self, dim=128, nheads=4, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+    def __init__(self, dim=128, nheads=2, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+        super().__init__()
         self.layer_norm = LayerNormalization()
         self.ffn = FeedForward(dim, dim)
-        self.msr(dim, dim//nheads, seq_len, retention_layer)
+        self.msr = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
 
     def call(self, x):
         msr_x = self.msr(x)
-        msr_x = self.layer_norm(x) + x
-        x = self.ffn(msr_x) + x
+        msr_x = self.layer_norm(x)
+        x = self.ffn(msr_x)
         return x
 
