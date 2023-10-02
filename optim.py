@@ -2,6 +2,7 @@
 # I can do this using keras tuner
 import keras_tuner as kt
 from tensorflow import keras
+import tensorflow as tf
 
 class ACP2HyperModel(kt.HyperModel):
     def __init__(self,
