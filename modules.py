@@ -94,7 +94,7 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 
 class Retention(Layer):
-    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
+    def __init__(self, dim = 128, nheads = 2, seq_len = 50, gamma = 0.9865):
         super().__init__()
 
         _dense_kwargs = {
@@ -147,9 +147,15 @@ class ChunkwiseRetention(Retention):
     self.gamma = tf.cast(gamma, tf.float32)
     self.seq_len=seq_len
     self.dim = dim
+    self.B = 2
+
+
+    _indices = torch.arange(self.B, dtype=torch.float)
+    _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
+    D = tf.ones((self.B, self.B), dtype='float32') * _decay_factors.numpy()
+    self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
 
     
-    self.B = 2
     _indices = torch.arange(seq_len//self.B, dtype=torch.float)
     self.Z = tf.convert_to_tensor((gamma ** (self.B -_indices.unsqueeze(1) - 1)).squeeze(1).numpy())
 
@@ -157,17 +163,15 @@ class ChunkwiseRetention(Retention):
     Q, K, V = [tf.split(f(z), self.seq_len//self.B, 1) for f, z in zip(self.r_layers.values(), x)]
     #d = x[-1].shape[-1]
     Vz =  [vi*z for z, vi in zip(self.Z.numpy().tolist(), V)]
-    X = [tf.zeros((1, self.B, self.dim)) for i in range(len(Q))]
-    print(Q[0].shape[0])
+    X = [tf.zeros((Q[0].shape[0], self.B, self.dim)) for i in range(len(Q))]
     R = [tf.zeros((Q[0].shape[0], self.dim, self.dim)) for i in range(self.seq_len//self.B)]
     for i in range(1, self.seq_len//self.B):
       R[i] = tf.einsum('bij, bik -> bjk', K[i], Vz[i]) + (self.gamma**self.B)*R[i-1]
       X[i-1] = (Q[i]@R[i-1])*(self.gamma**(i+1))
-
     
     for i in range(len(Q)):
-      X.append(((tf.transpose(Q[i]@tf.transpose(K[i], perm=[2, 1, 0]), perm=[2, 1, 0])*self.D)@V[i])+X[i])
-
+      S = tf.einsum('bij, bxk -> bik', Q[i], tf.transpose(K[i], perm=[0, 2, 1]))
+      X.append(((S*self.D)@V[i])+X[i])
     return X
 
 
