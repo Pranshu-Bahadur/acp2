@@ -94,7 +94,7 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 
 class Retention(Layer):
-    def __init__(self, dim = 128, nheads = 2, seq_len = 50, gamma = 0.9865):
+    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
         super().__init__()
 
         _dense_kwargs = {
@@ -142,7 +142,7 @@ class RecurrentRetention(Retention):
         return x
 
 class ChunkwiseRetention(Retention):
-  def __init__(self, dim = 128, nheads = 2, seq_len = 50, gamma = 0.9865):
+  def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
     super(ChunkwiseRetention, self).__init__()
     self.gamma = tf.cast(gamma, tf.float32)
     self.seq_len=seq_len
@@ -152,26 +152,32 @@ class ChunkwiseRetention(Retention):
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
-    D = tf.ones((self.B, self.B), dtype='float32') * _decay_factors.numpy()
-    self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
+    L = tf.ones((self.B, self.B), dtype='float32') * _decay_factors.numpy()
+    self.L = tf.transpose(tf.linalg.band_part(L, 0, -1), perm=[1, 0])
 
     
     _indices = torch.arange(seq_len//self.B, dtype=torch.float)
     self.Z = tf.convert_to_tensor((gamma ** (self.B -_indices.unsqueeze(1) - 1)).squeeze(1).numpy())
 
   def call(self, x):
+
     Q, K, V = [tf.split(f(z), self.seq_len//self.B, 1) for f, z in zip(self.r_layers.values(), x)]
     #d = x[-1].shape[-1]
     Vz =  [vi*z for z, vi in zip(self.Z.numpy().tolist(), V)]
-    X = [tf.zeros((Q[0].shape[0], self.B, self.dim)) for i in range(len(Q))]
-    R = [tf.zeros((Q[0].shape[0], self.dim, self.dim)) for i in range(self.seq_len//self.B)]
+    X = [Vz[i] for i in range(len(Q))]
+    R = [(tf.transpose(K[i], perm=[0, 2, 1])@Vz[i]) for i in range(self.seq_len//self.B)]
+
     for i in range(1, self.seq_len//self.B):
-      R[i] = tf.einsum('bij, bik -> bjk', K[i], Vz[i]) + (self.gamma**self.B)*R[i-1]
+      G = (self.gamma**self.B)*R[i-1]
+      R[i] = (tf.transpose(K[i], perm=[0, 2, 1])@Vz[i]) + G
       X[i-1] = (Q[i]@R[i-1])*(self.gamma**(i+1))
+
     
     for i in range(len(Q)):
       S = tf.einsum('bij, bxk -> bik', Q[i], tf.transpose(K[i], perm=[0, 2, 1]))
-      X.append(((S*self.D)@V[i])+X[i])
+      X[i] = ((S*self.L)@V[i])+X[i]
+    X= tf.concat(X, 1)
+    print(X.shape)
     return X
 
 
@@ -179,14 +185,14 @@ class ChunkwiseRetention(Retention):
 
 
 class MultiScaleRetention(Layer):
-    def __init__(self, dim, hdim=128, seq_len=50, **kwargs):
+    def __init__(self, dim, hdim=32, seq_len=50, **kwargs):
       super(MultiScaleRetention, self).__init__()
       dims = dim
       gamma = 1 - (2 ** (-5 - torch.arange(0, hdim)))
       gamma = gamma.numpy().tolist()
       self.dim = dim
       self.hdim = hdim
-      self.heads = [Retention(hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
+      self.heads = [ChunkwiseRetention(dim=hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
       self.gn = GroupNormalization()
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
@@ -199,7 +205,8 @@ class MultiScaleRetention(Layer):
       q = tf.split(x, self.dim//self.hdim, 2)
       k = tf.split(k, self.dim//self.hdim, 2)
       v = tf.split(v, self.dim//self.hdim, 2)
-      x = tf.concat([headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)], -1)
+      x = [headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)]
+      x = tf.concat(x, -1)
       Y = self.gn(x)
       x = self.wo(W * Y)
       return x
