@@ -1,3 +1,4 @@
+import tensorflow as tf
 import pandas as pd
 from pandas import read_csv, concat, DataFrame, merge, Series
 from tensorflow.keras.layers import TextVectorization
