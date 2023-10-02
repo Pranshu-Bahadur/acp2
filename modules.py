@@ -147,7 +147,7 @@ class ChunkwiseRetention(Retention):
     self.gamma = tf.cast(gamma, tf.float32)
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 2
+    self.B = 5
 
 
     _indices = torch.arange(self.B, dtype=torch.float)
@@ -176,8 +176,7 @@ class ChunkwiseRetention(Retention):
     for i in range(len(Q)):
       S = tf.einsum('bij, bxk -> bik', Q[i], tf.transpose(K[i], perm=[0, 2, 1]))
       X[i] = ((S*self.L)@V[i])+X[i]
-    X= tf.concat(X, 1)
-    print(X.shape)
+    X = tf.concat(X, 1)
     return X
 
 class MultiScaleRetention(Layer):
