@@ -180,19 +180,15 @@ class ChunkwiseRetention(Retention):
     print(X.shape)
     return X
 
-
-
-
-
 class MultiScaleRetention(Layer):
-    def __init__(self, dim, hdim=32, seq_len=50, **kwargs):
+    def __init__(self, dim, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
       super(MultiScaleRetention, self).__init__()
       dims = dim
       gamma = 1 - (2 ** (-5 - torch.arange(0, hdim)))
       gamma = gamma.numpy().tolist()
       self.dim = dim
       self.hdim = hdim
-      self.heads = [ChunkwiseRetention(dim=hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
+      self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
       self.gn = GroupNormalization()
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
@@ -210,3 +206,16 @@ class MultiScaleRetention(Layer):
       Y = self.gn(x)
       x = self.wo(W * Y)
       return x
+
+class RetentionBlock(Layer):
+    def __init__(self, dim=128, nheads=4, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+        self.layer_norm = LayerNormalization()
+        self.ffn = FeedForward(dim, dim)
+        self.msr(dim, dim//nheads, seq_len, retention_layer)
+
+    def call(self, x):
+        msr_x = self.msr(x)
+        msr_x = self.layer_norm(x) + x
+        x = self.ffn(msr_x) + x
+        return x
+
