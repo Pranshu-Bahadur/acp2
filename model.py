@@ -51,23 +51,31 @@ class ACPClassifier(Model):
 
     _layer_names = ['Q', 'K', 'V']
     self.retention_layer = Sequential([
+      LayerNormalization(),
       MultiScaleRetention(**retention_kwargs),
       LayerNormalization(),
-      FeedForward(dim, dim, dropout_rate=0.1)
+      FeedForward(dim, dim, dropout_rate=0.1),
       ])
 
+    """
     self.retention_layers = {
       k: 
       Sequential([
+        LayerNormalization(),
         MultiScaleRetention(**retention_kwargs),
         LayerNormalization(),
         FeedForward(dim, dim, dropout_rate=0.1),
         ])
         for k in _layer_names
       }
+
+    """
     
     self.fc = Sequential([
-        AdaptiveAveragePooling1D(self.seq_len//2),
+        #
+        LayerNormalization(),
+        FeedForward(dim, dim, dropout_rate=0.1),
+        #AdaptiveAveragePooling1D(self.seq_len),
         Flatten(),
         Dense(1, activation='sigmoid')
                           ])
@@ -87,7 +95,7 @@ class ACPClassifier(Model):
     return embeddings
   
   def _call_parallel_retention(self, embeddings):
-    Q, K, V = [f(z) for f, z in zip(self.retention_layers.values(), embeddings)]
+    Q, K, V = embeddings#[f(z) for f, z in zip(self.retention_layers.values(), embeddings)]
     _, _, d = Q.shape
     x = Q@tf.transpose(K, perm=[0, 2, 1])
     x /= d**0.5
@@ -96,9 +104,7 @@ class ACPClassifier(Model):
     x = x*D
     x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
     x = x@V
-    print(x.shape)
     return x
-
 
   def _call_sequential_retention(self, embeddings):
     x = tf.vectorized_map(lambda x: self.retention_layer(x), embeddings)
@@ -120,7 +126,7 @@ class ACPClassifier(Model):
     embeddings = self._call_embeddings(x)
     embeddings = tf.stack(embeddings)
     x = self._call_sequential_retention(embeddings)
-    x = tf.split(x, 3, 0)
+    x = tf.split(x, len(self.vocabs), 0)
     x = [tf.squeeze(z, 0) for z in x]
     x = self._call_parallel_retention(x)
     x = self.fc(x)
