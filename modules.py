@@ -36,7 +36,7 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     super().__init__()
     self.d_model = d_model
     self.embedding = tf.keras.layers.Embedding(vocab_size,
-     d_model, mask_zero=True, trainable=False)
+     d_model, mask_zero=True, trainable=True)
     self.pos_encoding = PE(seq_len, dim=d_model)
 
   def compute_mask(self, *args, **kwargs):
@@ -64,8 +64,8 @@ class FeedForward(tf.keras.layers.Layer):
   def __init__(self, d_model, dff, dropout_rate=0.1):
     super().__init__()
     self.seq = tf.keras.Sequential([
-      tf.keras.layers.Dense(dff, activation='relu'),
-      tf.keras.layers.Dense(d_model),
+      tf.keras.layers.Dense(dff),
+      tf.keras.layers.Dense(d_model, activation='swish'),
       tf.keras.layers.Dropout(dropout_rate)
     ])
     self.add = tf.keras.layers.Add()
@@ -214,7 +214,6 @@ class RetentionBlock(Layer):
 
     def call(self, x):
         msr_x = self.msr(x)
-        msr_x = self.layer_norm(x)
         x = self.ffn(msr_x)
         return x
 
