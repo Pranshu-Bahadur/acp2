@@ -114,29 +114,16 @@ class Retention(Layer):
       self.seq_len=seq_len
 
     def call(self, x, training=False):
-      if training:
-        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-        _, _, d = Q.shape
-        x = Q@tf.transpose(K, perm=[0, 2, 1])
-        x /= d**0.5
-        D = self.D
-        D /= tf.reduce_sum(tf.abs(D))**0.5
-        x = x*D
-        x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
-        x = x@V
-        return x
-      else:
-        D = self.D
-        D /= tf.reduce_sum(tf.abs(D))**0.5
-        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-        _, _, d = Q.shape
-        s = [K[:, i, :] for i in range(self.seq_len)]
-        for t in range(1, self.seq_len):
-          s[t] = (s[t-1]*D[t,t]) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
-        S = tf.stack(s)
-        x = Q*tf.transpose(S, perm=[1, 0, 2])
-        return x
-
+      Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+      _, _, d = Q.shape
+      x = Q@tf.transpose(K, perm=[0, 2, 1])
+      x /= d**0.5
+      D = self.D
+      D /= tf.reduce_sum(tf.abs(D))**0.5
+      x = x*D
+      x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
+      x = x@V
+      return x
 
 class RecurrentRetention(Layer):
     def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
@@ -156,13 +143,17 @@ class RecurrentRetention(Layer):
         self.seq_len=seq_len
 
     def call(self, x):
+      D = self.D
+      D /= tf.reduce_sum(tf.abs(D))**0.5
       Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+      _, _, d = Q.shape
       s = [K[:, i, :]*0 for i in range(self.seq_len)]
       for t in range(1, self.seq_len):
-        s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
+        s[t] = (s[t-1]*tf.reduce_mean(D[t,:])) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
       S = tf.stack(s)
-      x = tf.multiply(Q, tf.transpose(S, perm=[1, 0, 2]))
+      x = Q*tf.transpose(S, perm=[1, 0, 2])
       return x
+
 
 class ChunkwiseRetention(Layer):
   def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
