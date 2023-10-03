@@ -37,7 +37,7 @@ class ACP2HyperModel(kt.HyperModel):
         n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
         ngrams = hp.Choice('ngrams', self.ngrams)
         embedding_type = hp.Choice('embedding_type', [0, 1])
-        #retention_type = hp.Choice('retention_type', [0, 1, 2])
+        retention_type = hp.Choice('retention_type', [0, 1, 2])
 
 
         #n_layers_2 = hp.Choice('n_layers', [0, 1, 2, 4])
@@ -61,7 +61,7 @@ class ACP2HyperModel(kt.HyperModel):
         #self.tokenizer.adapt(self.train_text)
         
 
-        self.embedding_layers = [embedding_layers[hp.Choice('embedding_type', [0, 1])](len(self.tokenizer.get_vocabulary()), dim, trainable=False) for _ in range(3)]
+        self.embedding_layers = [embedding_layers[embedding_type](len(self.tokenizer.get_vocabulary()), dim, trainable=False) for _ in range(3)]
 
         retention_layers = [
             Retention,
@@ -70,7 +70,7 @@ class ACP2HyperModel(kt.HyperModel):
             ]
 
         retention_kwargs = [{
-                'retention_layer': retention_layers[hp.Choice('retention_type', [0, 1, 2])],
+                'retention_layer': retention_layers[retention_type],
                 'dim' : dim,
                 'hdim' : hdim,
                 'seq_len': seq_len
@@ -92,7 +92,7 @@ class ACP2HyperModel(kt.HyperModel):
         for embedding_layer in self.embedding_layers: 
           x = embedding_layer(inputs)
           outputs.append(self.msr_layer(x))
-        x = self.fc(tf.reduce_mean(tf.stack(outputs), 0))
+        x = self.fc(outputs[-1])
 
 
         self.model = Model(inputs=inputs, outputs=x)
