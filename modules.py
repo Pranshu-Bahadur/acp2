@@ -81,7 +81,7 @@ class EncoderLayer(tf.keras.layers.Layer):
   def __init__(self,*, d_model, num_heads, dff, dropout_rate=0.1):
     super().__init__()
 
-    self.self_attention = GlobalSelfAttention(
+    self.self_attention = BaseAttention(
         num_heads=num_heads,
         key_dim=d_model,
         dropout=dropout_rate)
@@ -95,7 +95,7 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 
 class Retention(Layer):
-    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
+    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
         super().__init__()
 
         _dense_kwargs = {
@@ -103,8 +103,7 @@ class Retention(Layer):
                 "dtype" : 'float32'
                 }
         _layer_names = ['Q', 'K', 'V']
-        _layer = Dense(dim, **_dense_kwargs)
-        self.r_layers = dict.fromkeys(_layer_names, _layer)
+        self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
 
         _indices = torch.arange(seq_len, dtype=torch.float)
         _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -117,34 +116,49 @@ class Retention(Layer):
         x = Q@tf.transpose(K, perm=[0, 2, 1])
         x /= d**0.5
         D = self.D
-        D /= tf.reduce_sum(D, 1)**0.5
+        D /= tf.reduce_sum(tf.abs(D))**0.5
         x = x*D
         x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
         x = x@V
         return x
 
-
-class RecurrentRetention(Retention):
-    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
+class RecurrentRetention(Layer):
+    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
         super(RecurrentRetention, self).__init__()
+        _dense_kwargs = {
+                "use_bias" : False,
+                "dtype" : 'float32'
+                }
+        _layer_names = ['Q', 'K', 'V']
+        self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
+
+        _indices = torch.arange(seq_len, dtype=torch.float)
+        _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
+        D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
+        self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
         self.gamma = tf.cast(gamma, tf.float32)
         self.seq_len=seq_len
 
     def call(self, x):
       Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-      s = [0 for i in range(self.seq_len)]
+      s = [K[:, i, :]*0 for i in range(self.seq_len)]
       for t in range(1, self.seq_len):
         s[t] = (s[t-1]*self.gamma) + tf.transpose(K[:, t, :], perm=[1, 0])@V[:, t , :]
-      s[0] = s[-1]
-      S = tf.convert_to_tensor(s)
-      S = tf.reshape(tf.math.reduce_sum(S, -1), [-1, self.seq_len])
-      x = tf.multiply(tf.transpose(S), Q)
+      S = tf.stack(s)
+      x = tf.multiply(Q, tf.transpose(S, perm=[1, 0, 2]))
       return x
 
-class ChunkwiseRetention(Retention):
-  def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865):
+class ChunkwiseRetention(Layer):
+  def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
     super(ChunkwiseRetention, self).__init__()
     self.gamma = tf.cast(gamma, tf.float32)
+    _dense_kwargs = {
+                "use_bias" : False,
+                "dtype" : 'float32'
+    }
+    _layer_names = ['Q', 'K', 'V']
+    self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
+
     self.seq_len=seq_len
     self.dim = dim
     self.B = 2
@@ -163,7 +177,7 @@ class ChunkwiseRetention(Retention):
     Q, K, V = [tf.split(f(z), self.seq_len//self.B, 1) for f, z in zip(self.r_layers.values(), x)]
     #d = x[-1].shape[-1]
     Vz =  [vi*z for z, vi in zip(self.Z.numpy().tolist(), V)]
-    X = [Vz[i] for i in range(len(Q))]
+    X = [Vz[i]*0 for i in range(len(Q))]
     R = [(tf.transpose(K[i], perm=[0, 2, 1])@Vz[i]) for i in range(self.seq_len//self.B)]
 
     for i in range(1, self.seq_len//self.B):
@@ -186,8 +200,8 @@ class MultiScaleRetention(Layer):
       gamma = gamma.numpy().tolist()
       self.dim = dim
       self.hdim = hdim
-      self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
-      self.gn = GroupNormalization(1)
+      self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len, **kwargs) for head in range(dim // hdim)]
+      self.gn = GroupNormalization(scale=False)
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])
