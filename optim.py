@@ -61,7 +61,7 @@ class ACP2HyperModel(kt.HyperModel):
         #self.tokenizer.adapt(self.train_text)
         
 
-        self.embedding_layers = [embedding_layers[hp.Choice('embedding_type', [0, 1])](len(self.tokenizer.get_vocabulary()), dim, trainable=False) for _ in range(ngrams)]
+        self.embedding_layers = [embedding_layers[hp.Choice('embedding_type', [0, 1])](len(self.tokenizer.get_vocabulary()), dim, trainable=False) for _ in range(3)]
 
         retention_layers = [
             Retention,
@@ -92,13 +92,13 @@ class ACP2HyperModel(kt.HyperModel):
         for embedding_layer in self.embedding_layers: 
           x = embedding_layer(inputs)
           outputs.append(self.msr_layer(x))
-        x = self.fc(outputs[-1])
+        x = self.fc(tf.reduce_mean(tf.stack(outputs), 0))
 
 
         self.model = Model(inputs=inputs, outputs=x)
         self.optimizer = tf.keras.optimizers.AdamW(CustomSchedule(dim), weight_decay=1e-5)
         self.model.compile(optimizer=self.optimizer,
-              loss='mse',
+              loss='binary_crossentropy',
               metrics=['binary_accuracy',\
                        tf.keras.metrics.Recall(),\
                        tf.keras.metrics.Precision(),
