@@ -34,7 +34,7 @@ class ACP2HyperModel(kt.HyperModel):
         hdim = hp.Choice('hdim', self.hdim)
         n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
         ngrams = hp.Choice('ngrams', self.ngrams)
-        embedding_type = hp.Choice('embedding_type', [0, 1])
+        #embedding_type = hp.Choice('embedding_type', [0, 1])
 
 
         #n_layers_2 = hp.Choice('n_layers', [0, 1, 2, 4])
@@ -43,7 +43,7 @@ class ACP2HyperModel(kt.HyperModel):
         seq_len = self.seq_len
         
         embedding_layers = [
-            PositionalEmbedding,
+            #PositionalEmbedding,
             Embedding
             ]
 
@@ -58,12 +58,12 @@ class ACP2HyperModel(kt.HyperModel):
         #self.tokenizer.adapt(self.train_text)
         
 
-        self.embedding_layer = embedding_layers[embedding_type](len(self.tokenizer.get_vocabulary()), dim, trainable=False)
+        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, trainable=False)
 
         retention_layers = [
-            Retention,
+            #Retention,
             #RecurrentRetention,
-            #ChunkwiseRetention,
+            ChunkwiseRetention,
             ]
 
         retention_kwargs = [{

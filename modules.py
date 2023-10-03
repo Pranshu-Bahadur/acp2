@@ -113,6 +113,13 @@ class Retention(Layer):
       self.gamma = tf.cast(gamma, tf.float32)
       self.seq_len=seq_len
 
+
+      _dense_kwargs = {
+                "use_bias" : True,
+                "dtype" : 'float32'
+                }
+      self.S = Dense(dim, **_dense_kwargs)
+
     def call(self, x, training=False):
       if training:
         Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
@@ -176,7 +183,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 2
+    self.B = 1
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
