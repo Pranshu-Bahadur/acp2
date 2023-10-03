@@ -118,7 +118,7 @@ class Retention(Layer):
       self.S = Dense(dim, **_dense_kwargs)
 
     def call(self, x, training=False):
-      if training:
+      if not training:
         Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
         _, _, d = Q.shape
         x = Q@tf.transpose(K, perm=[0, 2, 1])
@@ -159,7 +159,7 @@ class RecurrentRetention(Layer):
     def call(self, x):
       Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
       _, _, d = Q.shape
-      s = [Q[:, i, :] for i in range(self.seq_len)]
+      s = [Q[:, i, :]*0 for i in range(self.seq_len)]
       for t in range(1, self.seq_len):
         s[t] = (s[t-1]*self.gamma) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
       S = tf.stack(s)

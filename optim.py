@@ -16,7 +16,7 @@ class ACP2HyperModel(kt.HyperModel):
       super().__init__()
       self.dims = dims
       self.nheads=4
-      self.ngrams = [5]
+      self.ngrams = [1]
       self.seq_len = 50
       self.hdim = hdim
 
@@ -53,9 +53,9 @@ class ACP2HyperModel(kt.HyperModel):
           ngrams=ngrams,
           output_mode='int',
           output_sequence_length=seq_len,
-          trainable=False,
-          vocabulary=self.vocab)
-        #self.tokenizer.adapt(self.train_text)
+          trainable=False)
+          #vocabulary=self.vocab)
+        self.tokenizer.adapt(self.train_text)
         
 
         self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, trainable=False)
