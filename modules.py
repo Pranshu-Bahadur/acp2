@@ -1,3 +1,4 @@
+
 # Imports
 import tensorflow as tf
 from pandas import read_csv, DataFrame, concat
@@ -96,21 +97,24 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 class Retention(Layer):
     def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
-        super().__init__()
+      super().__init__()
 
-        _dense_kwargs = {
+      _dense_kwargs = {
                 "use_bias" : False,
                 "dtype" : 'float32'
                 }
-        _layer_names = ['Q', 'K', 'V']
-        self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
+      _layer_names = ['Q', 'K', 'V']
+      self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
 
-        _indices = torch.arange(seq_len, dtype=torch.float)
-        _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
-        D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
-        self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
+      _indices = torch.arange(seq_len, dtype=torch.float)
+      _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
+      D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
+      self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
+      self.gamma = tf.cast(gamma, tf.float32)
+      self.seq_len=seq_len
 
-    def call(self, x):
+    def call(self, x, training=False):
+      if training:
         Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
         _, _, d = Q.shape
         x = Q@tf.transpose(K, perm=[0, 2, 1])
@@ -121,6 +125,18 @@ class Retention(Layer):
         x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
         x = x@V
         return x
+      else:
+        D = self.D
+        D /= tf.reduce_sum(tf.abs(D))**0.5
+        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+        _, _, d = Q.shape
+        s = [K[:, i, :] for i in range(self.seq_len)]
+        for t in range(1, self.seq_len):
+          s[t] = (s[t-1]*D[t,t]) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
+        S = tf.stack(s)
+        x = Q*tf.transpose(S, perm=[1, 0, 2])
+        return x
+
 
 class RecurrentRetention(Layer):
     def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
@@ -226,8 +242,7 @@ class RetentionBlock(Layer):
         self.ffn = FeedForward(dim, dim)
         self.msr = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
 
-    def call(self, x):
-        msr_x = self.msr(x)
-        x = self.ffn(msr_x)
-        return x
-
+    def call(self, x, training=False):
+      msr_x = self.msr(x)
+      x = self.ffn(msr_x)
+      return x

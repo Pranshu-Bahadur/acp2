@@ -11,7 +11,7 @@ class ACP2HyperModel(kt.HyperModel):
     test_label,
     vocab,
     dims : list = [64, 128],
-    hdim : list = [8, 16, 32],
+    hdim : list = [32],
                  ):
       super().__init__()
       self.dims = dims
@@ -62,12 +62,12 @@ class ACP2HyperModel(kt.HyperModel):
 
         retention_layers = [
             Retention,
-            RecurrentRetention,
-            ChunkwiseRetention,
+            #RecurrentRetention,
+            #ChunkwiseRetention,
             ]
 
         retention_kwargs = [{
-                'retention_layer': retention_layers[hp.Choice(f'layer_{str(retention_layers[i])}', [i for i in range(len(retention_layers))])],
+                'retention_layer': retention_layers[0],
                 'dim' : dim,
                 'hdim' : hdim,
                 'seq_len': seq_len,
@@ -91,7 +91,7 @@ class ACP2HyperModel(kt.HyperModel):
 
         #layer = attention_layers[hp.Choice('layer_attention', [i for i in range(len(attention_layers))])]
 
-        #self.attention_layer = EncoderLayer(**attention_kwargs)
+        self.attention_layer = EncoderLayer(**attention_kwargs)
 
         self.fc = Sequential([
             #*[Dense(dim) for i in range(n_layers_2)],
@@ -108,6 +108,8 @@ class ACP2HyperModel(kt.HyperModel):
 
         self.model = Model(inputs=inputs, outputs=x)
         self.optimizer = tf.keras.optimizers.AdamW(CustomSchedule(dim))
+
+        
         self.model.compile(optimizer=self.optimizer,
               loss='binary_crossentropy',
               metrics=['binary_accuracy',\
