@@ -114,16 +114,26 @@ class Retention(Layer):
       self.seq_len=seq_len
 
     def call(self, x, training=False):
-      Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-      _, _, d = Q.shape
-      x = Q@tf.transpose(K, perm=[0, 2, 1])
-      x /= d**0.5
-      D = self.D
-      D /= tf.reduce_sum(tf.abs(D))**0.5
-      x = x*D
-      x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
-      x = x@V
-      return x
+      if training:
+        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+        _, _, d = Q.shape
+        x = Q@tf.transpose(K, perm=[0, 2, 1])
+        x /= d**0.5
+        D = self.D
+        D /= tf.reduce_sum(tf.abs(D))**0.5
+        x = x*D
+        x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
+        x = x@V
+        return x
+      else:
+        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+        _, _, d = Q.shape
+        s = [Q[:, i, :] for i in range(self.seq_len)]
+        for t in range(1, self.seq_len):
+          s[t] = (s[t-1]*self.gamma) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
+        S = tf.stack(s)
+        x = Q*tf.transpose(S, perm=[1, 0, 2])
+        return x
 
 class RecurrentRetention(Layer):
     def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
@@ -143,13 +153,11 @@ class RecurrentRetention(Layer):
         self.seq_len=seq_len
 
     def call(self, x):
-      D = self.D
-      D /= tf.reduce_sum(tf.abs(D))**0.5
       Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
       _, _, d = Q.shape
-      s = [K[:, i, :]*0 for i in range(self.seq_len)]
+      s = [Q[:, i, :] for i in range(self.seq_len)]
       for t in range(1, self.seq_len):
-        s[t] = (s[t-1]*tf.reduce_mean(D[t,:])) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
+        s[t] = (s[t-1]*self.gamma) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
       S = tf.stack(s)
       x = Q*tf.transpose(S, perm=[1, 0, 2])
       return x
@@ -191,8 +199,6 @@ class ChunkwiseRetention(Layer):
       G = (self.gamma**self.B)*R[i-1]
       R[i] = (tf.transpose(K[i], perm=[0, 2, 1])@Vz[i]) + G
       X[i-1] = (Q[i]@R[i-1])*(self.gamma**(i+1))
-
-    
     for i in range(len(Q)):
       S = tf.einsum('bij, bxk -> bik', Q[i], tf.transpose(K[i], perm=[0, 2, 1]))
       X[i] = ((S*self.L)@V[i])+X[i]
