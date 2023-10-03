@@ -36,7 +36,7 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     super().__init__()
     self.d_model = d_model
     self.embedding = tf.keras.layers.Embedding(vocab_size,
-     d_model, mask_zero=True, trainable=True)
+     d_model, mask_zero=True, trainable=False)
     self.pos_encoding = PE(seq_len, dim=d_model)
 
   def compute_mask(self, *args, **kwargs):
@@ -65,7 +65,7 @@ class FeedForward(tf.keras.layers.Layer):
     super().__init__()
     self.seq = tf.keras.Sequential([
       tf.keras.layers.Dense(dff),
-      tf.keras.layers.Dense(d_model, activation='swish'),
+      tf.keras.layers.Dense(d_model, activation='relu'),
       tf.keras.layers.Dropout(dropout_rate)
     ])
     self.add = tf.keras.layers.Add()
@@ -187,7 +187,7 @@ class MultiScaleRetention(Layer):
       self.dim = dim
       self.hdim = hdim
       self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len) for head in range(dim // hdim)]
-      self.gn = GroupNormalization()
+      self.gn = GroupNormalization(1)
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])

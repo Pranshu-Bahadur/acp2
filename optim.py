@@ -12,14 +12,15 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [64, 128, 256],
-    nheads : list = [4],
+    dims : list = [64, 128, 256, 512],
+    hdim : list = [32],
                  ):
       super().__init__()
       self.dims = dims
-      self.nheads=nheads
-      self.ngrams = [1, 2, 3, 4, 5, 6, 7]
+      self.nheads=4
+      self.ngrams = [i for i in range(1, 25)]
       self.seq_len = 50
+      self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
       self.train_text = train_text
@@ -31,11 +32,11 @@ class ACP2HyperModel(kt.HyperModel):
        
     def build(self, hp):
         dim = hp.Choice('dim', self.dims)
-        nheads = hp.Choice('nheads', self.nheads)
-        n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
-        ngrams = 3#hp.Choice('ngrams', self.ngrams)
-        #n_layers_2 = hp.Choice('n_layers', [1, 2, 3, 4])
-
+        hdim = hp.Choice('hdim', self.hdim)
+        n_layers = hp.Choice('n_layers', [i for i in range(1, 5)])
+        ngrams = hp.Choice('ngrams', self.ngrams)
+        #n_layers_2 = hp.Choice('n_layers', [0, 1, 2, 4])
+        nheads = 4
 
         seq_len = self.seq_len
         
@@ -58,11 +59,10 @@ class ACP2HyperModel(kt.HyperModel):
         i = random.randrange(len(embedding_layers))
 
 
-        self.embedding_layer = [embedding_layers[i](len(self.tokenizer.get_vocabulary()), dim)\
-          for _ in range(ngrams)]
+        self.embedding_layer = embedding_layers[i](len(self.tokenizer.get_vocabulary()), dim)
 
         retention_layers = [
-            #Retention,
+            Retention,
             RecurrentRetention,
             ChunkwiseRetention,
             ]
@@ -72,7 +72,7 @@ class ACP2HyperModel(kt.HyperModel):
         retention_kwargs = [{
                 'retention_layer': retention_layers[random.randrange(len(retention_layers))],
                 'dim' : dim,
-                'hdim' : 32,
+                'hdim' : hdim,
                 'seq_len': seq_len
                 }for i in range(n_layers)]
 
@@ -82,25 +82,23 @@ class ACP2HyperModel(kt.HyperModel):
           ])
 
         self.fc = Sequential([
-            #*[FeedForward(dim, dim) for i in range(n_layers_2)],
+            #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
+            Dense(64, activation='relu', kernel_initializer='glorot_normal'),
+            Dense(32, activation='relu', kernel_initializer='glorot_normal'),
+            Dense(16, activation='relu', kernel_initializer='he_uniform'),
             Dense(1, activation='sigmoid')
             ])
 
         inputs = Input((seq_len, ))
-        x = []
-        for i in range(ngrams):
-          x.append(self.embedding_layer[i](inputs))
-        x = tf.stack(x)
-        x = tf.reduce_mean(x, 0)
-        print(x.shape)
+        x = self.embedding_layer(inputs)
         x = self.msr_layer(x)
         x = self.fc(x)
 
         self.model = Model(inputs=inputs, outputs=x)
         self.optimizer = tf.keras.optimizers.AdamW(1e-3)
         self.model.compile(optimizer=self.optimizer,
-              loss='binary_crossentropy',
+              loss='mse',
               metrics=['binary_accuracy',\
                        tf.keras.metrics.Recall(),\
                        tf.keras.metrics.Precision(),
