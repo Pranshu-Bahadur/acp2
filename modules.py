@@ -46,17 +46,34 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     return self.embedding.compute_mask(*args, **kwargs)
 
   def call(self, input_ids, training=False):
-    #if training:
 
-    # create a boolean mask where the values are zero
-    mask = tf.equal(input_ids, 0)
-    input_ids = tf.where(mask, tf.random.uniform(tf.shape(input_ids),
-     minval=2,
-      maxval=self.vocab_size,
-       dtype=tf.float32), input_ids)
-    input_ids = tf.vectorized_map(lambda x: tf.random.shuffle(x), input_ids)
+    frames = [i+1 for i in range(16)]
+    frames = list(map(lambda i: tf.signal.frame(input_ids, i, 1, axis=-1, pad_end=True), frames))
+
+    for i in range(len(frames)):
+      padding_needed = 25 - i+1
+      paddings = tf.constant([[0, 0], [0, 0], [0, padding_needed]])
+      frames[i] = tf.pad(frames[i], paddings, "CONSTANT")
+      
+    input_ids = tf.concat(frames, -1)
+    input_ids = tf.reshape(input_ids, (tf.shape(input_ids)[0], -1))
+
     x = self.embedding(input_ids)
+
+    """
+    if training or not training:
+      input_ids = tf.vectorized_map(lambda x: tf.random.shuffle(x), input_ids)
+      mask = tf.equal(input_ids, 0)
+      input_ids = tf.where(mask, tf.random.uniform(tf.shape(input_ids),
+      minval=2,
+        maxval=self.vocab_size,
+        dtype=tf.float32), input_ids)
+    """
+      
     return x
+    
+    #x = self.embedding(input_ids)
+    #return x
 
 class BaseAttention(tf.keras.layers.Layer):
   def __init__(self, **kwargs):
@@ -164,7 +181,7 @@ class RecurrentRetention(Layer):
 
 
 class ChunkwiseRetention(Layer):
-  def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
+  def __init__(self, dim = 32, nheads = 2, seq_len = 25, gamma = 0.9865, **kwargs):
     super(ChunkwiseRetention, self).__init__()
     self.gamma = tf.cast(gamma, tf.float32)
     _dense_kwargs = {
@@ -176,7 +193,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 2
+    self.B = 5
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -213,7 +230,7 @@ class MultiScaleRetention(Layer):
       self.dim = dim
       self.hdim = hdim
       self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len, **kwargs) for head in range(dim // hdim)]
-      self.gn = GroupNormalization(scale=False)
+      self.gn = GroupNormalization(dim, scale=False)
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])

@@ -10,14 +10,14 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [64, 128],
+    dims : list = [128],
     hdim : list = [32],
                  ):
       super().__init__()
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 50
+      self.seq_len = 25
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
