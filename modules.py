@@ -27,36 +27,35 @@ def PE(length, dim):
   posn = torch.arange(length).unsqueeze(1).float().numpy()
   dims = torch.arange(dim).unsqueeze(0).float().numpy()/dim
 
-  posn_encoding = posn / (1e+4**dims)
+  posn_encoding = posn / ((1e+4)**dims)
   posn_encoding = tf.concat([np.sin(posn_encoding), np.cos(posn_encoding)], -1)
   return tf.cast(posn_encoding, dtype=tf.float32)
 
 
 class PositionalEmbedding(tf.keras.layers.Layer):
-  def __init__(self, vocab_size, d_model, seq_len=50, **kwargs):
+  def __init__(self, vocab_size, d_model, dropout=0.2, **kwargs):
     super().__init__()
     self.d_model = d_model
     self.embedding = tf.keras.layers.Embedding(vocab_size,
      d_model, mask_zero=True, **kwargs)
-    self.pos_encoding = PE(seq_len, dim=d_model)
+    self.vocab_size= vocab_size
+    #self.pos_encoding = PE(seq_len, dim=d_model)
+    self.dropout = dropout
 
   def compute_mask(self, *args, **kwargs):
     return self.embedding.compute_mask(*args, **kwargs)
 
   def call(self, input_ids, training=False):
-    if training:
-      #length = tf.shape(input_ids)[1]
-      mask = tf.random.uniform(shape=(tf.shape(input_ids)))
-      mask = tf.cast(mask > 0.5, tf.int32)
-      input_ids = input_ids * tf.cast(mask, tf.float32)
-        
-      x = self.embedding(input_ids)
-      #input_ids = tf.cast(input_ids, tf.int32)
-      #encodings = x + (self.pos_encoding[tf.newaxis, :length, :])
-      #x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-      #x += encodings
-    else:
-      x = self.embedding(input_ids)
+    #if training:
+
+    # create a boolean mask where the values are zero
+    mask = tf.equal(input_ids, 0)
+    input_ids = tf.where(mask, tf.random.uniform(tf.shape(input_ids),
+     minval=2,
+      maxval=self.vocab_size,
+       dtype=tf.float32), input_ids)
+    input_ids = tf.vectorized_map(lambda x: tf.random.shuffle(x), input_ids)
+    x = self.embedding(input_ids)
     return x
 
 class BaseAttention(tf.keras.layers.Layer):
@@ -177,7 +176,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 25
+    self.B = 2
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -188,10 +187,9 @@ class ChunkwiseRetention(Layer):
     _indices = torch.arange(seq_len//self.B, dtype=torch.float)
     self.Z = tf.convert_to_tensor((gamma ** (self.B -_indices.unsqueeze(1) - 1)).squeeze(1).numpy())
 
-  def call(self, x):
+  def call(self, x, training=False):
 
     Q, K, V = [tf.split(f(z), self.seq_len//self.B, 1) for f, z in zip(self.r_layers.values(), x)]
-    #d = x[-1].shape[-1]
     Vz =  [vi*z for z, vi in zip(self.Z.numpy().tolist(), V)]
     X = [Vz[i]*0 for i in range(len(Q))]
     R = [(tf.transpose(K[i], perm=[0, 2, 1])@Vz[i]) for i in range(self.seq_len//self.B)]

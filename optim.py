@@ -9,12 +9,13 @@ class ACP2HyperModel(kt.HyperModel):
     train_label,
     test_text,
     test_label,
+    vocab,
     dims : list = [64, 128],
     hdim : list = [32],
                  ):
       super().__init__()
       self.dims = dims
-      self.nheads=4
+      self.nheads= 4
       self.ngrams = [1]
       self.seq_len = 50
       self.hdim = hdim
@@ -23,7 +24,7 @@ class ACP2HyperModel(kt.HyperModel):
       self.train_text = train_text
       self.train_label = train_label
       self.test_text = test_text
-      #self.vocab = vocab
+      self.vocab = vocab
       self.test_label = test_label
 
        
@@ -33,6 +34,7 @@ class ACP2HyperModel(kt.HyperModel):
         hdim = hp.Choice('hdim', self.hdim)
         n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
         ngrams = hp.Choice('ngrams', self.ngrams)
+        dropout = hp.Choice('dropout', [0.2, 0.3])
         #embedding_type = hp.Choice('embedding_type', [0, 1])
         n_layers_2 = hp.Choice('n_layers_2', [1, 2, 4])
         nheads = 4
@@ -57,7 +59,7 @@ class ACP2HyperModel(kt.HyperModel):
         #seq_len = len(self.tokenizer.get_vocabulary())
         
 
-        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, trainable=False)
+        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, dropout=dropout, trainable=True)
 
         retention_layers = [
             #Retention,
@@ -97,28 +99,29 @@ class ACP2HyperModel(kt.HyperModel):
 
         self.attention_layer = EncoderLayer(**attention_kwargs)
 
+        
         self.resnet_layers = Sequential([
           ResNetBlock(**resnet_kwargs)
           for i in range(n_layers_2)
           ])
+        
+        self.dropout = Dropout(0.2)
 
         self.fc = Sequential([
             #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
             Dense(1, activation='sigmoid')
             ])
-
         inputs = Input((seq_len, ))
+        #inputs = self.dropout(inputs)
         x = self.embedding_layer(inputs)
         #x = self.attention_layer(x)
-        x = self.msr_layer(x)
         #x = self.resnet_layers(x)
+        x = self.msr_layer(x)
+        #
         x = self.fc(x)
-
-
         self.model = Model(inputs=inputs, outputs=x)
-        self.optimizer = tf.keras.optimizers.AdamW(CustomSchedule(dim))
-
+        self.optimizer = tf.keras.optimizers.Adam(1e-3)#CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
               loss='binary_crossentropy',
