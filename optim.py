@@ -17,7 +17,7 @@ class ACP2HyperModel(kt.HyperModel):
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 25
+      self.seq_len = 550
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
@@ -59,7 +59,7 @@ class ACP2HyperModel(kt.HyperModel):
         #seq_len = len(self.tokenizer.get_vocabulary())
         
 
-        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, dropout=dropout, trainable=True)
+        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), 128, dropout=dropout, trainable=True)
 
         retention_layers = [
             #Retention,

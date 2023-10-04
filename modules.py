@@ -47,18 +47,27 @@ class PositionalEmbedding(tf.keras.layers.Layer):
 
   def call(self, input_ids, training=False):
 
-    frames = [i+1 for i in range(16)]
+    frames = [i+1 for i in range(10)]
     frames = list(map(lambda i: tf.signal.frame(input_ids, i, 1, axis=-1, pad_end=True), frames))
 
     for i in range(len(frames)):
-      padding_needed = 25 - i+1
+      padding_needed = 10 - i
       paddings = tf.constant([[0, 0], [0, 0], [0, padding_needed]])
       frames[i] = tf.pad(frames[i], paddings, "CONSTANT")
       
     input_ids = tf.concat(frames, -1)
+    #input_ids = tf.concat([frames, input_ids], -1)
+    
+    
     input_ids = tf.reshape(input_ids, (tf.shape(input_ids)[0], -1))
 
+    #print(frames.shape)
     x = self.embedding(input_ids)
+
+    #x = tf.reshape(x, (tf.shape(x)[0], 25, -1))
+
+
+    #print(tf.reshape(x, (tf.shape(x)[0], 25, -1)).shape)
 
     """
     if training or not training:
@@ -153,7 +162,7 @@ class Retention(Layer):
         
 
 class RecurrentRetention(Layer):
-    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
+    def __init__(self, dim = 100, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
         super(RecurrentRetention, self).__init__()
         _dense_kwargs = {
                 "use_bias" : False,
@@ -193,7 +202,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 5
+    self.B = 55
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -222,7 +231,7 @@ class ChunkwiseRetention(Layer):
     return X
 
 class MultiScaleRetention(Layer):
-    def __init__(self, dim, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+    def __init__(self, dim, hdim=100, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
       super(MultiScaleRetention, self).__init__()
       dims = dim
       gamma = 1 - (2 ** (-5 - torch.arange(0, hdim)))
@@ -230,7 +239,7 @@ class MultiScaleRetention(Layer):
       self.dim = dim
       self.hdim = hdim
       self.heads = [retention_layer(dim=hdim, gamma=gamma[head], seq_len=seq_len, **kwargs) for head in range(dim // hdim)]
-      self.gn = GroupNormalization(dim, scale=False)
+      self.gn = GroupNormalization(hdim, scale=False)
       self.wg = Sequential([
             Dense(dims, use_bias=False, activation = 'swish', **kwargs),
         ])
@@ -249,7 +258,7 @@ class MultiScaleRetention(Layer):
       return x
 
 class RetentionBlock(Layer):
-    def __init__(self, dim=128, nheads=2, hdim=32, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+    def __init__(self, dim=540, nheads=2, hdim=100, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
         super().__init__()
         self.layer_norm = LayerNormalization()
         self.ffn = FeedForward(dim, dim)
