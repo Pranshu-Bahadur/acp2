@@ -9,7 +9,6 @@ class ACP2HyperModel(kt.HyperModel):
     train_label,
     test_text,
     test_label,
-    vocab,
     dims : list = [64, 128],
     hdim : list = [32],
                  ):
@@ -24,7 +23,7 @@ class ACP2HyperModel(kt.HyperModel):
       self.train_text = train_text
       self.train_label = train_label
       self.test_text = test_text
-      self.vocab = vocab
+      #self.vocab = vocab
       self.test_label = test_label
 
        
@@ -35,16 +34,14 @@ class ACP2HyperModel(kt.HyperModel):
         n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
         ngrams = hp.Choice('ngrams', self.ngrams)
         #embedding_type = hp.Choice('embedding_type', [0, 1])
-
-
-        #n_layers_2 = hp.Choice('n_layers', [0, 1, 2, 4])
+        n_layers_2 = hp.Choice('n_layers_2', [1, 2, 4])
         nheads = 4
 
         seq_len = self.seq_len
         
         embedding_layers = [
-            #PositionalEmbedding,
-            Embedding
+            PositionalEmbedding,
+            #Embedding
             ]
 
         self.tokenizer = TextVectorization(
@@ -56,6 +53,8 @@ class ACP2HyperModel(kt.HyperModel):
           trainable=False)
           #vocabulary=self.vocab)
         self.tokenizer.adapt(self.train_text)
+
+        #seq_len = len(self.tokenizer.get_vocabulary())
         
 
         self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, trainable=False)
@@ -83,6 +82,11 @@ class ACP2HyperModel(kt.HyperModel):
           EncoderLayer
         ]
 
+        resnet_kwargs = {
+          'dim' : dim,
+          'kernel_size': 2,
+        }
+
         attention_kwargs = {
           'num_heads': 4,
           'd_model' : dim,
@@ -93,6 +97,11 @@ class ACP2HyperModel(kt.HyperModel):
 
         self.attention_layer = EncoderLayer(**attention_kwargs)
 
+        self.resnet_layers = Sequential([
+          ResNetBlock(**resnet_kwargs)
+          for i in range(n_layers_2)
+          ])
+
         self.fc = Sequential([
             #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
@@ -101,8 +110,9 @@ class ACP2HyperModel(kt.HyperModel):
 
         inputs = Input((seq_len, ))
         x = self.embedding_layer(inputs)
-        x = self.msr_layer(x)
         #x = self.attention_layer(x)
+        x = self.msr_layer(x)
+        #x = self.resnet_layers(x)
         x = self.fc(x)
 
 

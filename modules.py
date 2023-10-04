@@ -43,14 +43,20 @@ class PositionalEmbedding(tf.keras.layers.Layer):
   def compute_mask(self, *args, **kwargs):
     return self.embedding.compute_mask(*args, **kwargs)
 
-  def call(self, input_ids):
-    length = tf.shape(input_ids)[1]
-    x = self.embedding(input_ids)
-    input_ids = tf.cast(input_ids, tf.int32)
-    encodings = x + (self.pos_encoding[tf.newaxis, :length, :])
-
-    x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-    x += encodings
+  def call(self, input_ids, training=False):
+    if training:
+      #length = tf.shape(input_ids)[1]
+      mask = tf.random.uniform(shape=(tf.shape(input_ids)))
+      mask = tf.cast(mask > 0.5, tf.int32)
+      input_ids = input_ids * tf.cast(mask, tf.float32)
+        
+      x = self.embedding(input_ids)
+      #input_ids = tf.cast(input_ids, tf.int32)
+      #encodings = x + (self.pos_encoding[tf.newaxis, :length, :])
+      #x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+      #x += encodings
+    else:
+      x = self.embedding(input_ids)
     return x
 
 class BaseAttention(tf.keras.layers.Layer):
@@ -118,26 +124,17 @@ class Retention(Layer):
       self.S = Dense(dim, **_dense_kwargs)
 
     def call(self, x, training=False):
-      if not training:
-        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-        _, _, d = Q.shape
-        x = Q@tf.transpose(K, perm=[0, 2, 1])
-        x /= d**0.5
-        D = self.D
-        D /= tf.reduce_sum(tf.abs(D))**0.5
-        x = x*D
-        x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
-        x = x@V
-        return x
-      else:
-        Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-        _, _, d = Q.shape
-        s = [Q[:, i, :] for i in range(self.seq_len)]
-        for t in range(1, self.seq_len):
-          s[t] = (s[t-1]*self.gamma) + tf.einsum('ib, bj -> bj', tf.transpose(K[:, t, :], perm=[1, 0]), V[:, t , :])
-        S = tf.stack(s)
-        x = Q*tf.transpose(S, perm=[1, 0, 2])
-        return x
+      Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
+      _, _, d = Q.shape
+      x = Q@tf.transpose(K, perm=[0, 2, 1])
+      x /= d**0.5
+      D = self.D
+      D /= tf.reduce_sum(tf.abs(D))**0.5
+      x = x*D
+      x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
+      x = x@V
+      return x
+        
 
 class RecurrentRetention(Layer):
     def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
@@ -180,7 +177,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 1
+    self.B = 25
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -247,3 +244,49 @@ class RetentionBlock(Layer):
       msr_x = self.msr(self.layer_norm(x)) + x
       x = self.ffn(self.layer_norm(msr_x)) + msr_x
       return x
+
+
+class ResNetBlock(Layer):
+  def __init__(self, dim, kernel_size, strides=1, padding='same'):
+    super().__init__()
+    self.layer_1 = Sequential([
+      Conv1D(dim, kernel_size, strides, padding=padding),
+      LayerNormalization(),
+      ReLU()])
+
+    self.layer_2 = Sequential([
+      Conv1D(dim, kernel_size, strides, padding=padding),
+      LayerNormalization()])
+
+    self.activation = ReLU()
+
+  def call(self, x, training=False):
+    x_skip = x
+    x = self.layer_1(x)
+    x = self.layer_2(x)
+    x = x + x_skip
+    x = self.activation(x)
+    return x
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
