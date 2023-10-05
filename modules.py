@@ -21,43 +21,6 @@ from tensorflow.keras.layers import Layer, Dense
 from torch.nn import RNN
 import torch
 
-def PE(length, dim):
-  dim /= 2
-
-  posn = torch.arange(length).unsqueeze(1).float().numpy()
-  dims = torch.arange(dim).unsqueeze(0).float().numpy()/dim
-
-  posn_encoding = posn / ((1e+4)**dims)
-  posn_encoding = tf.concat([np.sin(posn_encoding), np.cos(posn_encoding)], -1)
-  return tf.cast(posn_encoding, dtype=tf.float32)
-
-
-class PositionalEmbedding(tf.keras.layers.Layer):
-  def __init__(self, vocab_size, d_model, dropout=0.2, **kwargs):
-    super().__init__()
-    self.d_model = d_model
-    self.embedding = tf.keras.layers.Embedding(vocab_size,
-     d_model, mask_zero=True, **kwargs)
-    self.vocab_size= vocab_size
-    #self.pos_encoding = PE(seq_len, dim=d_model)
-    self.dropout = Dropout(dropout)
-
-  def compute_mask(self, *args, **kwargs):
-    return self.embedding.compute_mask(*args, **kwargs)
-
-  def call(self, input_ids, training=False):
-    #if training:
-    #  input_ids = tf.vectorized_map(lambda i: tf.random.shuffle(i), input_ids)
-    x = self.embedding(input_ids)
-    return x
-
-class BaseAttention(tf.keras.layers.Layer):
-  def __init__(self, **kwargs):
-    super().__init__()
-    self.mha = tf.keras.layers.MultiHeadAttention(**kwargs)
-    self.layernorm = tf.keras.layers.LayerNormalization()
-    self.add = tf.keras.layers.Add()
-
 
 class FeedForward(tf.keras.layers.Layer):
   def __init__(self, d_model, dff, dropout_rate=0.1):
@@ -70,24 +33,6 @@ class FeedForward(tf.keras.layers.Layer):
 
   def call(self, x):
     return self.seq(x)
-
-
-
-class EncoderLayer(tf.keras.layers.Layer):
-  def __init__(self,*, d_model, num_heads, dff, dropout_rate=0.1):
-    super().__init__()
-
-    self.self_attention = BaseAttention(
-        num_heads=num_heads,
-        key_dim=d_model,
-        dropout=dropout_rate)
-
-    self.ffn = FeedForward(d_model, dff)
-
-  def call(self, x):
-    x = self.self_attention(x)
-    x = self.ffn(x)
-    return x
 
 
 class Retention(Layer):
@@ -169,7 +114,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 1
+    self.B = 10
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
@@ -212,53 +157,47 @@ class MultiScaleRetention(Layer):
         ])
       self.wo = Dense(dims, use_bias=False, **kwargs)
 
-    def call(self, x):
-      x, k, v = x, x, x
-      W = self.wg(x)
-      q = tf.split(x, self.dim//self.hdim, 2)
+    def call(self, q, k, v):
+      W = self.wg(q) #or k, v
+
+      q = tf.split(q, self.dim//self.hdim, 2)
       k = tf.split(k, self.dim//self.hdim, 2)
       v = tf.split(v, self.dim//self.hdim, 2)
+
       x = [headi([qi, ki, vi]) for headi, qi, ki, vi in zip(self.heads, q, k, v)]
       x = tf.concat(x, -1)
       Y = self.gn(x)
       x = self.wo(W * Y)
       return x
 
-class RetentionBlock(Layer):
+class RetentionEncoder(Layer):
     def __init__(self, dim=540, nheads=2, hdim=100, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
         super().__init__()
         self.layer_norm = LayerNormalization()
-        self.ffn = FeedForward(dim, dim)
         self.msr = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
-
+        self.ffn = FeedForward(dim, dim)
     def call(self, x, training=False):
-      msr_x = self.msr(self.layer_norm(x)) + x
+      xn = self.layer_norm(x)
+      msr_x = self.msr(xn, xn, xn) + x
       x = self.ffn(self.layer_norm(msr_x)) + msr_x
       return x
 
+class RetentionDecoder(Layer):
+    def __init__(self, dim=540, nheads=2, hdim=100, seq_len=50, retention_layer=ChunkwiseRetention, **kwargs):
+        super().__init__()
+        self.layer_norm = LayerNormalization()
+        self.msr_1 = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
+        self.msr_2 = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
+        self.ffn = FeedForward(dim, dim)
 
-class ResNetBlock(Layer):
-  def __init__(self, dim, kernel_size, strides=1, padding='same'):
-    super().__init__()
-    self.layer_1 = Sequential([
-      Conv1D(dim, kernel_size, strides, padding=padding),
-      LayerNormalization(),
-      ReLU()])
-
-    self.layer_2 = Sequential([
-      Conv1D(dim, kernel_size, strides, padding=padding),
-      LayerNormalization()])
-
-    self.activation = ReLU()
-
-  def call(self, x, training=False):
-    x_skip = x
-    x = self.layer_1(x)
-    x = self.layer_2(x)
-    x = x + x_skip
-    x = self.activation(x)
-    return x
-  
+    def call(self, x, x1, training=False):
+      x1n = self.layer_norm(x1)
+      x1 = self.msr_1(x1, x1, x1) + x1
+      xn = self.layer_norm(x)
+      x1n = self.layer_norm(x1)
+      x = self.msr_2(xn, xn, x1n) + x1
+      x = self.ffn(self.layer_norm(x)) + x
+      return x
 
 
 

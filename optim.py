@@ -10,8 +10,8 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [128],
-    hdim : list = [32],
+    dims : list = [64],
+    hdim : list = [8],
                  ):
       super().__init__()
       self.dims = dims
@@ -26,7 +26,6 @@ class ACP2HyperModel(kt.HyperModel):
       self.test_text = test_text
       self.vocab = vocab
       self.test_label = test_label
-
        
     def build(self, hp):
         dim = hp.Choice('dim', self.dims)
@@ -35,17 +34,10 @@ class ACP2HyperModel(kt.HyperModel):
         n_layers = hp.Choice('n_layers', [i for i in range(1, 3)])
         ngrams = hp.Choice('ngrams', self.ngrams)
         dropout = hp.Choice('dropout', [0.2, 0.3])
-        #embedding_type = hp.Choice('embedding_type', [0, 1])
         n_layers_2 = hp.Choice('n_layers_2', [1, 2, 4])
         nheads = 4
 
         seq_len = self.seq_len
-        
-        embedding_layers = [
-            PositionalEmbedding,
-            #Embedding
-            ]
-            
         self.tokenizers = [TextVectorization(
           split='character',
           output_mode='int',
@@ -54,66 +46,37 @@ class ACP2HyperModel(kt.HyperModel):
           ngrams=i+1,
           vocabulary=self.vocab[i]) for i in range(3)]
           
-        self.embeddings = [PositionalEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
+        self.embeddings = [Embedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
+        self.outputs = Embedding(len(self.tokenizers[-1].get_vocabulary()), dim, trainable=True)
 
         retention_layers = [
             #Retention,
-            RecurrentRetention,
-            #ChunkwiseRetention,
+            #RecurrentRetention,
+            ChunkwiseRetention,
             ]
 
-        retention_kwargs = [{
+        retention_kwargs = {
                 'retention_layer': retention_layers[0],
                 'dim' : dim,
                 'hdim' : hdim,
                 'seq_len': seq_len,
-                }for i in range(n_layers)]
+                }
 
-        self.msr_layer = Sequential([
-          RetentionBlock(**retention_kwargs[i])
-          for i in range(n_layers)
-          ])
-
-        attention_layers = [
-          BaseAttention,
-          EncoderLayer
-        ]
-
-        resnet_kwargs = {
-          'dim' : dim,
-          'kernel_size': 2,
-        }
-
-        attention_kwargs = {
-          'num_heads': 4,
-          'd_model' : dim,
-          'dff' : dim
-        }
-
-        #layer = attention_layers[hp.Choice('layer_attention', [i for i in range(len(attention_layers))])]
-
-        self.attention_layer = EncoderLayer(**attention_kwargs)
-
+        self.msr_encoder = RetentionEncoder(**retention_kwargs)
         
-        self.resnet_layers = Sequential([
-          ResNetBlock(**resnet_kwargs)
-          for i in range(n_layers_2)
-          ])
-        
-        self.dropout = Dropout(0.1)
-
+        self.msr_decoder = RetentionDecoder(**retention_kwargs)
         self.fc = Sequential([
-          Dense(50),
-            #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
             Dense(1, activation='sigmoid')
             ])
+
         inputs = Input((150, ))
-        inputs = tf.split(inputs, 3, -1)
-        print(inputs[-1].shape)
-        x = [embedding(input_ids) for embedding, input_ids in zip(self.embeddings, inputs)]
+        o = self.outputs(inputs)
+        x = tf.split(inputs, 3, -1)
+        x = [embedding(input_ids) for embedding, input_ids in zip(self.embeddings, x)]
         x = tf.concat(x, 1)
-        x = self.msr_layer(x)
+        x = self.msr_encoder(x)
+        x = self.msr_decoder(x, o)
         x = self.fc(x)
         self.model = Model(inputs=inputs, outputs=x)
         self.optimizer = tf.keras.optimizers.Adam(1e-3)#CustomSchedule(dim))#, weight_decay=1e-5)
@@ -127,15 +90,10 @@ class ACP2HyperModel(kt.HyperModel):
         return self.model
 
     def fit(self, hp, model, *args, **kwargs):
-
-
         x = list(map(lambda tokenizer: tokenizer(self.train_text), self.tokenizers))
         train_text = tf.concat(x, 1)
-
         x = list(map(lambda tokenizer: tokenizer(self.test_text), self.tokenizers))
         test_text = tf.concat(x, 1)
-
-      
         train_text = train_text
         train_label =  self.train_label
         val_text = test_text
