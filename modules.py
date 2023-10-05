@@ -22,6 +22,37 @@ from torch.nn import RNN
 import torch
 
 
+def PE(length, dim):
+  dim /= 2
+
+  posn = torch.arange(length).unsqueeze(1).float().numpy()
+  dims = torch.arange(dim).unsqueeze(0).float().numpy()/dim
+
+  posn_encoding = posn / ((1e+4)**dims)
+  posn_encoding = tf.concat([np.sin(posn_encoding), np.cos(posn_encoding)], -1)
+  return tf.cast(posn_encoding, dtype=tf.float32)
+
+
+class PositionalEmbedding(tf.keras.layers.Layer):
+  def __init__(self, vocab_size, d_model, dropout=0.2, **kwargs):
+    super().__init__()
+    self.d_model = d_model
+    self.embedding = tf.keras.layers.Embedding(vocab_size,
+     d_model, mask_zero=True, **kwargs)
+    self.vocab_size= vocab_size
+    #self.pos_encoding = PE(seq_len, dim=d_model)
+    self.dropout = Dropout(dropout)
+
+  def compute_mask(self, *args, **kwargs):
+    return self.embedding.compute_mask(*args, **kwargs)
+
+  def call(self, input_ids, training=False):
+    if training:
+      input_ids = tf.vectorized_map(lambda i: tf.random.shuffle(i), input_ids)
+    x = self.embedding(input_ids)
+    return x
+
+
 class FeedForward(tf.keras.layers.Layer):
   def __init__(self, d_model, dff, dropout_rate=0.1):
     super().__init__()
