@@ -10,14 +10,14 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [64],
-    hdim : list = [8],
+    dims : list = [128],
+    hdim : list = [32],
                  ):
       super().__init__()
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 25
+      self.seq_len = 150
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
@@ -45,26 +45,21 @@ class ACP2HyperModel(kt.HyperModel):
             PositionalEmbedding,
             #Embedding
             ]
-
-        self.tokenizer = TextVectorization(
-          standardize=None,
+            
+        self.tokenizers = [TextVectorization(
           split='character',
-          ngrams=ngrams,
           output_mode='int',
-          output_sequence_length=seq_len,
-          trainable=False)
-          #vocabulary=self.vocab)
-        self.tokenizer.adapt(self.train_text)
-
-        #seq_len = len(self.tokenizer.get_vocabulary())
-        
-
-        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, dropout=dropout, trainable=False)
+          output_sequence_length=50,
+          standardize='strip_punctuation',
+          ngrams=i+1,
+          vocabulary=self.vocab[i]) for i in range(3)]
+          
+        self.embeddings = [PositionalEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
 
         retention_layers = [
             #Retention,
-            #RecurrentRetention,
-            ChunkwiseRetention,
+            RecurrentRetention,
+            #ChunkwiseRetention,
             ]
 
         retention_kwargs = [{
@@ -108,36 +103,43 @@ class ACP2HyperModel(kt.HyperModel):
         self.dropout = Dropout(0.1)
 
         self.fc = Sequential([
-          Dense(25),
+          Dense(50),
             #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
-            Dense(2, activation='softmax')
+            Dense(1, activation='sigmoid')
             ])
-        inputs = Input((seq_len, ))
-        #inputs = self.dropout(inputs)
-        x = self.embedding_layer(inputs)
-        #x = self.attention_layer(x)
-        #x = self.resnet_layers(x)
+        inputs = Input((150, ))
+        inputs = tf.split(inputs, 3, -1)
+        print(inputs[-1].shape)
+        x = [embedding(input_ids) for embedding, input_ids in zip(self.embeddings, inputs)]
+        x = tf.concat(x, 1)
         x = self.msr_layer(x)
-        #
         x = self.fc(x)
         self.model = Model(inputs=inputs, outputs=x)
         self.optimizer = tf.keras.optimizers.Adam(1e-3)#CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
-              loss='categorical_crossentropy',
-              metrics=['accuracy',\
+              loss='binary_crossentropy',
+              metrics=['binary_accuracy',\
                        tf.keras.metrics.Recall(),\
                        tf.keras.metrics.Precision(),
                        tf.keras.metrics.AUC()])
         return self.model
 
     def fit(self, hp, model, *args, **kwargs):
+
+
+        x = list(map(lambda tokenizer: tokenizer(self.train_text), self.tokenizers))
+        train_text = tf.concat(x, 1)
+
+        x = list(map(lambda tokenizer: tokenizer(self.test_text), self.tokenizers))
+        test_text = tf.concat(x, 1)
+
       
-        train_text = self.tokenizer(self.train_text)
-        train_label =  tf.keras.utils.to_categorical(self.train_label)
-        val_text = self.tokenizer(self.test_text)
-        val_y =  tf.keras.utils.to_categorical(self.test_label)
+        train_text = train_text
+        train_label =  self.train_label
+        val_text = test_text
+        val_y =  self.test_label
         return model.fit(train_text, train_label, validation_data=[val_text, val_y],
             *args,
             **kwargs)
