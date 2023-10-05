@@ -10,14 +10,14 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [128],
-    hdim : list = [32],
+    dims : list = [64],
+    hdim : list = [8],
                  ):
       super().__init__()
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 550
+      self.seq_len = 25
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
@@ -59,7 +59,7 @@ class ACP2HyperModel(kt.HyperModel):
         #seq_len = len(self.tokenizer.get_vocabulary())
         
 
-        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), 128, dropout=dropout, trainable=True)
+        self.embedding_layer = embedding_layers[0](len(self.tokenizer.get_vocabulary()), dim, dropout=dropout, trainable=False)
 
         retention_layers = [
             #Retention,
@@ -105,12 +105,13 @@ class ACP2HyperModel(kt.HyperModel):
           for i in range(n_layers_2)
           ])
         
-        self.dropout = Dropout(0.2)
+        self.dropout = Dropout(0.1)
 
         self.fc = Sequential([
+          Dense(25),
             #*[Dense(dim) for i in range(n_layers_2)],
             Flatten(),
-            Dense(1, activation='sigmoid')
+            Dense(2, activation='softmax')
             ])
         inputs = Input((seq_len, ))
         #inputs = self.dropout(inputs)
@@ -124,8 +125,8 @@ class ACP2HyperModel(kt.HyperModel):
         self.optimizer = tf.keras.optimizers.Adam(1e-3)#CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
-              loss='binary_crossentropy',
-              metrics=['binary_accuracy',\
+              loss='categorical_crossentropy',
+              metrics=['accuracy',\
                        tf.keras.metrics.Recall(),\
                        tf.keras.metrics.Precision(),
                        tf.keras.metrics.AUC()])
@@ -134,9 +135,9 @@ class ACP2HyperModel(kt.HyperModel):
     def fit(self, hp, model, *args, **kwargs):
       
         train_text = self.tokenizer(self.train_text)
-        train_label = self.train_label
+        train_label =  tf.keras.utils.to_categorical(self.train_label)
         val_text = self.tokenizer(self.test_text)
-        val_y = self.test_label
+        val_y =  tf.keras.utils.to_categorical(self.test_label)
         return model.fit(train_text, train_label, validation_data=[val_text, val_y],
             *args,
             **kwargs)

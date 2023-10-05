@@ -40,49 +40,16 @@ class PositionalEmbedding(tf.keras.layers.Layer):
      d_model, mask_zero=True, **kwargs)
     self.vocab_size= vocab_size
     #self.pos_encoding = PE(seq_len, dim=d_model)
-    self.dropout = dropout
+    self.dropout = Dropout(dropout)
 
   def compute_mask(self, *args, **kwargs):
     return self.embedding.compute_mask(*args, **kwargs)
 
   def call(self, input_ids, training=False):
-
-    frames = [i+1 for i in range(10)]
-    frames = list(map(lambda i: tf.signal.frame(input_ids, i, 1, axis=-1, pad_end=True), frames))
-
-    for i in range(len(frames)):
-      padding_needed = 10 - i
-      paddings = tf.constant([[0, 0], [0, 0], [0, padding_needed]])
-      frames[i] = tf.pad(frames[i], paddings, "CONSTANT")
-      
-    input_ids = tf.concat(frames, -1)
-    #input_ids = tf.concat([frames, input_ids], -1)
-    
-    
-    input_ids = tf.reshape(input_ids, (tf.shape(input_ids)[0], -1))
-
-    #print(frames.shape)
+    #if training:
+    #  input_ids = tf.vectorized_map(lambda i: tf.random.shuffle(i), input_ids)
     x = self.embedding(input_ids)
-
-    #x = tf.reshape(x, (tf.shape(x)[0], 25, -1))
-
-
-    #print(tf.reshape(x, (tf.shape(x)[0], 25, -1)).shape)
-
-    """
-    if training or not training:
-      input_ids = tf.vectorized_map(lambda x: tf.random.shuffle(x), input_ids)
-      mask = tf.equal(input_ids, 0)
-      input_ids = tf.where(mask, tf.random.uniform(tf.shape(input_ids),
-      minval=2,
-        maxval=self.vocab_size,
-        dtype=tf.float32), input_ids)
-    """
-      
     return x
-    
-    #x = self.embedding(input_ids)
-    #return x
 
 class BaseAttention(tf.keras.layers.Layer):
   def __init__(self, **kwargs):
@@ -202,7 +169,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 55
+    self.B = 1
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
