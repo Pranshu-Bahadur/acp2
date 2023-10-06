@@ -46,8 +46,8 @@ class ACP2HyperModel(kt.HyperModel):
           ngrams=i+1,
           vocabulary=self.vocab[i]) for i in range(3)]
           
-        self.embeddings = [PositionalEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
-        self.outputs = PositionalEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=True)
+        self.embeddings = [RetentionEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
+        self.outputs = RetentionEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=True)
 
         retention_layers = [
             #Retention,
