@@ -3,21 +3,18 @@ from tensorflow import keras
 import tensorflow as tf
 import random
 
-class ACP2HyperModel(kt.HyperModel):
+class ACP2HyperModel1(kt.HyperModel):
     def __init__(self,
-    train_text,
-    train_label,
-    test_text,
-    test_label,
-    vocab,
-    dims : list = [128],
-    hdim : list = [32],
-                 ):
+    train_dataset : DataFrame,
+    test_dataset : DataFrame):
       super().__init__()
+
+      _vocabulary = generate_vocab(train_dataset.text, 3)
+      self.tokenizer = self.build_tokenizer(3, _vocabulary)
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 50*3
+      self.seq_len = 50
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
@@ -38,16 +35,9 @@ class ACP2HyperModel(kt.HyperModel):
         nheads = 4
 
         seq_len = self.seq_len
-        self.tokenizers = [TextVectorization(
-          split='character',
-          output_mode='int',
-          output_sequence_length=seq_len//3,
-          standardize='strip_punctuation',
-          ngrams=i+1,
-          vocabulary=self.vocab[i]) for i in range(3)]
           
         self.embeddings = [PositionalEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
-        self.outputs = PositionalEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=True)
+        self.outputs = PositionalEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=False)
 
         retention_layers = [
             #Retention,
@@ -70,16 +60,16 @@ class ACP2HyperModel(kt.HyperModel):
             Dense(1, activation='sigmoid')
             ])
 
-        inputs = Input((seq_len, ))
+        inputs = Input((50, ))
         o = self.outputs(inputs)
-        x = tf.split(inputs, 3, -1)
-        x = [embedding(input_ids) for embedding, input_ids in zip(self.embeddings, x)]
-        x = tf.concat(x, 1)
+        #x = tf.split(inputs, 3, -1)
+        x = self.embeddings[0](inputs)#[embedding(input_ids) for embedding, input_ids in zip(self.embeddings, x)]
+        #x = tf.concat(x, 1)
         x = self.msr_encoder(x)
         x = self.msr_decoder(x, o)
         x = self.fc(x)
         self.model = Model(inputs=inputs, outputs=x)
-        self.optimizer = tf.keras.optimizers.Adam(CustomSchedule(dim))#, weight_decay=1e-5)
+        self.optimizer = tf.keras.optimizers.Adam(1e-3)#CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
               loss='binary_crossentropy',
@@ -90,15 +80,25 @@ class ACP2HyperModel(kt.HyperModel):
         return self.model
 
     def fit(self, hp, model, *args, **kwargs):
-        train_text = list(map(lambda tokenizer: tokenizer(self.train_text), self.tokenizers))
-        val_text = list(map(lambda tokenizer: tokenizer(self.test_text), self.tokenizers))
-        train_text = tf.concat(train_text, 1)
-        val_text = tf.concat(val_text, 1)
+        train_text = self.tokenizers[0](self.train_text)
+        val_text = self.tokenizers[0](self.test_text)
         train_label =  self.train_label
         val_y =  self.test_label
         return model.fit(train_text, train_label, validation_data=[val_text, val_y],
             *args,
             **kwargs)
+
+    def build_tokenizer(self, ngrams, vocabulary):
+      _conf = {
+        'ngrams': 1,
+        'output_mode': 'int',
+        'output_sequence_length': 50,
+        'split': 'character',
+        'standardize': 'strip_punctuation',
+        'vocabulary' : vocabulary
+        }
+      return TextVectorization(**_conf)
+
 
 
     

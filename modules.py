@@ -47,8 +47,8 @@ class PositionalEmbedding(tf.keras.layers.Layer):
     return self.embedding.compute_mask(*args, **kwargs)
 
   def call(self, input_ids, training=False):
-    if training:
-      input_ids = tf.vectorized_map(lambda i: tf.random.shuffle(i), input_ids)
+    #if training:
+      #input_ids = tf.vectorized_map(lambda i: tf.random.shuffle(i), input_ids)
     x = self.embedding(input_ids)
     return x
 
@@ -145,7 +145,7 @@ class ChunkwiseRetention(Layer):
 
     self.seq_len=seq_len
     self.dim = dim
-    self.B = 10
+    self.B = 5
 
     _indices = torch.arange(self.B, dtype=torch.float)
     _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
