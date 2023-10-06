@@ -17,7 +17,7 @@ class ACP2HyperModel(kt.HyperModel):
       self.dims = dims
       self.nheads= 4
       self.ngrams = [1]
-      self.seq_len = 50*3
+      self.seq_len = 50
       self.hdim = hdim
 
       i = random.randrange(len(self.ngrams))
@@ -45,40 +45,19 @@ class ACP2HyperModel(kt.HyperModel):
           standardize='strip_punctuation',
           ngrams=i+1,
           vocabulary=self.vocab[i]) for i in range(3)]
-          
-        self.embeddings = [RetentionEmbedding(len(self.tokenizers[i].get_vocabulary()), dim, trainable=False) for i in range(3)]
-        self.outputs = RetentionEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=True)
 
-        retention_layers = [
-            Retention,
-            #RecurrentRetention,
-            #ChunkwiseRetention,
-            ]
-
-        retention_kwargs = {
-                'retention_layer': retention_layers[0],
+        model_kwargs = {
+                'tokenizers': self.tokenizers
                 'dim' : dim,
                 'hdim' : hdim,
                 'seq_len': seq_len,
+                'embeddings_conf' : {
+                    'trainable' : False
+                    }
                 }
 
-        self.msr_encoder = RetentionEncoder(**retention_kwargs)
-        
-        self.msr_decoder = RetentionDecoder(**retention_kwargs)
-        self.fc = Sequential([
-            Flatten(),
-            Dense(1, activation='sigmoid')
-            ])
 
-        inputs = Input((seq_len, ))
-        o = self.outputs(inputs)
-        x = tf.split(inputs, 3, -1)
-        x = [embedding(input_ids) for embedding, input_ids in zip(self.embeddings, x)]
-        x = tf.concat(x, 1)
-        x = self.msr_encoder(x)
-        x = self.msr_decoder(x, o)
-        x = self.fc(x)
-        self.model = Model(inputs=inputs, outputs=x)
+        self.model = ACP2RetNet(**model_kwargs)
         self.optimizer = tf.keras.optimizers.Adam(CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
