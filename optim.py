@@ -50,9 +50,9 @@ class ACP2HyperModel(kt.HyperModel):
         self.outputs = RetentionEmbedding(len(self.tokenizers[0].get_vocabulary()), dim, trainable=True)
 
         retention_layers = [
-            #Retention,
+            Retention,
             #RecurrentRetention,
-            ChunkwiseRetention,
+            #ChunkwiseRetention,
             ]
 
         retention_kwargs = {
