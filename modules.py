@@ -65,44 +65,38 @@ class FeedForward(tf.keras.layers.Layer):
   def call(self, x):
     return self.seq(x)
 
-
 class Retention(Layer):
-    def __init__(self, dim = 32, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
-      super().__init__()
-
-      _dense_kwargs = {
+    def __init__(self, dim=128, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
+        super().__init__()
+        _dense_kwargs = {
                 "use_bias" : False,
-                "dtype" : 'float32'
+                "dtype" : "float32"
                 }
-      _layer_names = ['Q', 'K', 'V']
-      self.r_layers = {k: Dense(dim, **_dense_kwargs) for k in _layer_names}
-
-      _indices = torch.arange(seq_len, dtype=torch.float)
-      _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
-      D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
-      self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
-      self.gamma = tf.cast(gamma, tf.float32)
-      self.seq_len=seq_len
-
-
-      _dense_kwargs = {
-                "use_bias" : True,
-                "dtype" : 'float32'
-                }
-      self.S = Dense(dim, **_dense_kwargs)
+        self._qkv_layers = [*repeat(Dense(dim, **_dense_kwargs), 3)]
+        self.D = self._compute_decay(seq_len, gamma)
+        self.seq_len = seq_len
+        self.gamma = tf.cast(gamma, tf.float32)
 
     def call(self, x, training=False):
-      Q, K, V = [f(z) for f, z in zip(self.r_layers.values(), x)]
-      _, _, d = Q.shape
-      x = Q@tf.transpose(K, perm=[0, 2, 1])
-      x /= d**0.5
-      D = self.D
-      D /= tf.reduce_sum(tf.abs(D))**0.5
-      x = x*D
-      x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
-      x = x@V
-      return x
-        
+        Q, K, V = [f(z) for f, z in zip(self._qkv_layers, x)]
+        _, _, d = Q.shape
+        x = Q@tf.transpose(K, perm=[0, 2, 1])
+        x /= d**0.5 #Normalization Trick 1
+        D = self.D
+        D /= tf.reduce_sum(D, 1)**0.5 #Normalization Trick 2
+        x = x*D
+        _norm_3 = lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, 1)), 1))
+        x = tf.vectorized_map(_norm_3, x) #Normalization Trick 3
+        x = x@V
+        return x
+    
+    def _compute_decay(self, seq_len, gamma = 0.9865):
+        _indices = torch.arange(seq_len, dtype=torch.float)
+        _decay_factors = gamma ** (_indices.unsqueeze(1) - _indices)
+        D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
+        return tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
+
+  
 
 class RecurrentRetention(Layer):
     def __init__(self, dim = 100, nheads = 2, seq_len = 50, gamma = 0.9865, **kwargs):
