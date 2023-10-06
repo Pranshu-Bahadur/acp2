@@ -104,7 +104,7 @@ class MultiScaleRetention(Layer):
       return x
 
 class RetentionEncoder(Layer):
-    def __init__(self, dim=540, nheads=2, hdim=100, seq_len=50, retention_layer=Retention, **kwargs):
+    def __init__(self, dim=540, hdim=100, seq_len=50, retention_layer=Retention, **kwargs):
         super().__init__()
         self.layer_norm = LayerNormalization()
         self.msr = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)
@@ -116,7 +116,7 @@ class RetentionEncoder(Layer):
       return x
 
 class RetentionDecoder(Layer):
-    def __init__(self, dim=540, nheads=2, hdim=100, seq_len=50, retention_layer=Retention, **kwargs):
+    def __init__(self, dim=540, hdim=100, seq_len=50, retention_layer=Retention, **kwargs):
         super().__init__()
         self.layer_norm = LayerNormalization()
         self.msr_1 = MultiScaleRetention(dim, hdim, seq_len, retention_layer=retention_layer)

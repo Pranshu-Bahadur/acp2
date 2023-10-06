@@ -38,30 +38,32 @@ class ACP2HyperModel(kt.HyperModel):
         nheads = 4
 
         seq_len = self.seq_len
-        self.tokenizers = [TextVectorization(
+        self.tokenizers = [
+          TextVectorization(
           split='character',
           output_mode='int',
-          output_sequence_length=seq_len//3,
+          output_sequence_length=seq_len,
           standardize='strip_punctuation',
           ngrams=i+1,
           vocabulary=self.vocab[i]) for i in range(3)]
 
         model_kwargs = {
-                'tokenizers': self.tokenizers
+                'tokenizers': self.tokenizers,
                 'dim' : dim,
                 'hdim' : hdim,
                 'seq_len': seq_len,
                 'embeddings_conf' : {
-                    'trainable' : False
+                    'trainable' : True
                     }
                 }
-
-
-        self.model = ACP2RetNet(**model_kwargs)
+        self.layer = ACP2RetNet(model_kwargs)
+        x = Input((seq_len*3, ))
+        outputs = self.layer(x)
+        self.model = Model(inputs=x, outputs=outputs)
         self.optimizer = tf.keras.optimizers.Adam(CustomSchedule(dim))#, weight_decay=1e-5)
         
         self.model.compile(optimizer=self.optimizer,
-              loss='binary_crossentropy',
+              loss= tf.keras.losses.BinaryFocalCrossentropy(apply_class_balancing=True, label_smoothing=1e-5),
               metrics=['binary_accuracy',\
                        tf.keras.metrics.Recall(),\
                        tf.keras.metrics.Precision(),
