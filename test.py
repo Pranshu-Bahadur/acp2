@@ -5,9 +5,8 @@ exec(open('dataset.py').read())
 
 
 
-
 dataset = load_dataset('train.tsv')
 
 X = dataset.text
 
-print(generate_vocab(X, 3)[2])
+print(len(generate_vocab(X, 3)[0]))

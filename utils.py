@@ -39,5 +39,5 @@ def generate_vocab(sequences, ngrams):
     ngram = product(*list(repeat(amino_acids, i+1)))
     ngram = ["".join(gram) for gram in ngram]
     result.append(ngram)
-  return [reduce(lambda x, y: x+y, result[:i+1], result[0]) for i in range(ngrams)]
+  return [reduce(lambda x, y: x+y, result[:i], []) for i in range(1, ngrams+1)]
 
