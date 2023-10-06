@@ -1,133 +1,39 @@
-import tensorflow as tf
-from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import Embedding, Dense, Flatten, Dropout, ReLU, LayerNormalization
-from tensorflow_addons.layers import AdaptiveAveragePooling1D
-import numpy
-from itertools import product
-
-from sklearn.metrics.pairwise import cosine_similarity
-import tensorflow as tf
-from tensorflow.keras import Model, Sequential
-from tensorflow.keras.layers import Embedding, Dense, Flatten, Dropout, ReLU, LayerNormalization
-from tensorflow_addons.layers import AdaptiveAveragePooling1D
-import numpy
-from itertools import product
-from functools import reduce
-
-class ACPClassifier(Model):
-  def __init__(self,
-               dim,
-               seq_len,
-               num_heads,
-               vocabs,
-               tokenizer,
-               **kwargs):
-    super(ACPClassifier, self).__init__()
-
-    self.dim = dim
-    self.seq_len = seq_len
-    self.vocabs = vocabs
-    self.tokenizer = tokenizer
-
-    self.tokenizer.set_vocabulary(self.vocabs[len(vocabs)-1])
-
-    self.embedding_layers = {
-        k:
-        PositionalEmbedding(len(tokenizer.get_vocabulary()), dim)
-        for k,v in self.vocabs.items()
-    }
-
-    print('embeddings initialized')
-    """
-    self.retention_layer = MultiScaleRetention(dim,
-                                               hdim=dim//num_heads,
-                                            seq_len=seq_len)
-    """
-    retention_kwargs = {
-            "dim" : dim,
-            "hdim" :dim//num_heads,
-            "seq_len": seq_len
-            }
-
-    _layer_names = ['Q', 'K', 'V']
-    self.retention_layer = Sequential([
-      LayerNormalization(),
-      MultiScaleRetention(**retention_kwargs),
-      LayerNormalization(),
-      FeedForward(dim, dim, dropout_rate=0.1),
-      ])
-
-    """
-    self.retention_layers = {
-      k: 
-      Sequential([
-        LayerNormalization(),
-        MultiScaleRetention(**retention_kwargs),
-        LayerNormalization(),
-        FeedForward(dim, dim, dropout_rate=0.1),
-        ])
-        for k in _layer_names
-      }
-
-    """
-    
-    self.fc = Sequential([
-        #
-        LayerNormalization(),
-        FeedForward(dim, dim, dropout_rate=0.1),
-        #AdaptiveAveragePooling1D(self.seq_len),
-        Flatten(),
-        Dense(1, activation='sigmoid')
-                          ])
-
-    _indices = torch.arange(seq_len, dtype=torch.float)
-    _decay_factors = 0.96875 ** (_indices.unsqueeze(1) - _indices)
-    D = tf.ones((seq_len, seq_len), dtype='float32') * _decay_factors.numpy()
-    self.D = tf.transpose(tf.linalg.band_part(D, 0, -1), perm=[1, 0])
-  
-  def _call_embeddings(self, x):
-    embeddings = []
-    for k, v in self.embedding_layers.items():
-      self.tokenizer.set_vocabulary(self.vocabs[len(vocabs)-1])
-      _input_ids = self.tokenizer(x)
-      embedding = v(_input_ids)
-      embeddings.append(embedding)
-    return embeddings
-  
-  def _call_parallel_retention(self, embeddings):
-    Q, K, V = embeddings#[f(z) for f, z in zip(self.retention_layers.values(), embeddings)]
-    _, _, d = Q.shape
-    x = Q@tf.transpose(K, perm=[0, 2, 1])
-    x /= d**0.5
-    D = self.D
-    D /= tf.reduce_sum(D, 1)**0.5
-    x = x*D
-    x = tf.vectorized_map(lambda xs: tf.math.divide(xs, tf.maximum(tf.abs(tf.math.reduce_sum(xs, -1)), 1)), x)
-    x = x@V
-    return x
-
-  def _call_sequential_retention(self, embeddings):
-    x = tf.vectorized_map(lambda x: self.retention_layer(x), embeddings)
-    return x
+exec(open('layers.py').read())
 
 
-  def call(self, x, training=False):
-    """
-    if training:
-        embeddings = tf.stack(embeddings)
-        x = self._call_sequential_norm(embeddings)
-        x = self._call_sequential_retention(x)
-        x = self._call_sequential_ffn(x)
-        x = self.fc(self.layer_norm(tf.reduce_mean(x, 0)))
-    else:
-        x = embeddings[-1]
+class ACP2RetNet(Model):
+    def __init__(self, conf, **kwargs):
+        super().__init__()
 
-    """
-    embeddings = self._call_embeddings(x)
-    embeddings = tf.stack(embeddings)
-    x = self._call_sequential_retention(embeddings)
-    x = tf.split(x, len(self.vocabs), 0)
-    x = [tf.squeeze(z, 0) for z in x]
-    x = self._call_parallel_retention(x)
-    x = self.fc(x)
-    return x
+        #@TODO: Add Memoization for states
+        
+        _tokenizers = conf['tokenizers']
+        _embeddings_conf = conf['embeddings_conf']
+
+        self.embedding_layers = self._init_embedding_layers(_tokenizers,
+                conf['dim'], **_embeddings_conf)
+
+        _arg_keys = ['dim', 'hdim', 'seq_len']
+        _retention_args = list(map(lambda key: conf[key], _arg_keys))
+
+        self.encoder_layer = RetentionEncoder(*_retention_args)
+        self.decoder_layer = RetentionDecoder(*_retention_args)
+
+        self.final_layer = Sequential([
+            Flatten(),
+            Dense(1, activation = 'sigmoid')
+            ])
+
+
+    def _init_embedding_layers(self, tokenizers, dim, **kwargs) -> list:
+        
+        vocab_size = lambda tokenizer: len(tokenizer.get_vocabulary())
+        vocab_sizes = list(map(lambda tokenizer: vocab_size(tokenizer), tokenizers))
+        layers = [*repeat(RetentionEmbedding, len(vocab_sizes))]
+
+        return list(map(lambda layer, vocab_size: layer(vocab_size, dim, **kwargs),
+            layers, vocab_sizes))
+
+    def _call_embedding_layers(self):
+        pass
+

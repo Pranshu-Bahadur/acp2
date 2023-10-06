@@ -9,7 +9,6 @@ from tensorflow.keras.layers import TextVectorization, Input, Embedding, Conv1D,
   DepthwiseConv1D, MaxPooling1D,\
    GlobalAveragePooling1D, Concatenate, GroupNormalization, LSTM, GlobalMaxPooling1D, Activation,\
     Dropout, Attention, Dot, Bidirectional, GRU
-from sklearn.metrics.pairwise import cosine_similarity
 from tensorflow.keras.metrics import AUC
 import numpy as np
 import torch
