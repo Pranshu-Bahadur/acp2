@@ -1,11 +1,13 @@
-# Code Example 1-Gram
-
+from pathlib import Path
 import tensorflow as tf
 from tensorflow.keras.layers import TextVectorization
 import itertools
 from itertools import product, repeat
 from numpy import asarray
 from functools import reduce
+
+def get_dir_files(dpath : str, fext : str = ".py") -> str:
+    return list(Path(dpath).glob(f"**/*{fext}"))
 
 class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
   def __init__(self, d_model, warmup_steps=4000):
@@ -40,4 +42,3 @@ def generate_vocab(sequences, ngrams):
     ngram = ["".join(gram) for gram in ngram]
     result.append(ngram)
   return [reduce(lambda x, y: x+y, result[:i], []) for i in range(1, ngrams+1)]
-
