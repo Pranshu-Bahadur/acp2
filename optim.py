@@ -11,7 +11,7 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [512*4],
+    dims : list = [128*4],
     hdim : list = [768//4],
                  ):
       super().__init__()
