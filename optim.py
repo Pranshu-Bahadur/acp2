@@ -11,7 +11,7 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [512*4],
+    dims : list = [32*4],
     hdim : list = [768//4],
                  ):
       super().__init__()
@@ -19,7 +19,7 @@ class ACP2HyperModel(kt.HyperModel):
       self.nheads= 4
       self.ngrams = [1]
       self.seq_len = 25
-      self.hdim = [dims[-1]//2]
+      self.hdim = [dims[-1]//4]
 
       i = random.randrange(len(self.ngrams))
       self.train_text = train_text
@@ -37,9 +37,9 @@ class ACP2HyperModel(kt.HyperModel):
         dropout = hp.Choice('dropout', [0.2, 0.3])
         n_layers_2 = hp.Choice('n_layers_2', [1, 2, 4])
         nheads = 4
+        n_embeddings = 3
         seq_len = self.seq_len
-
-        n_embeddings = 1
+        
         self.tokenizers = [
                 AutoTokenizer.from_pretrained('AmelieSchreiber/esm2_t6_8M_finetuned_cafa5', padding='max_length', truncation=True) 
                 for i in range(n_embeddings)]
@@ -50,14 +50,15 @@ class ACP2HyperModel(kt.HyperModel):
                 'hdim' : hdim,
                 'seq_len': seq_len,
                 'embeddings_conf' : {
-                    #'trainable' : True
+                    'trainable' : True
                     },
                 'fc_dim': fc_dim,
                 'n_embeddings' : n_embeddings
                 }
 
-        self.esm = TFAutoModel.from_pretrained('google/t5-efficient-tiny', from_pt=True)
-        self.esm_fc = Dense(dim)
+
+        #self.esm = TFAutoModel.from_pretrained('google/t5-efficient-tiny', from_pt=True)
+        self.esm_fc = RetentionEmbedding(len(self.tokenizers[-1].get_vocab()), dim)#Dense(dim)
 
         transformer_kwargs = {
                 'num_layers' : 1,
@@ -72,9 +73,9 @@ class ACP2HyperModel(kt.HyperModel):
         self.layer = ACP2RetNet(model_kwargs)#Transformer(**transformer_kwargs)#
         
         x = Input((seq_len*n_embeddings, ))
-        o = tf.split(x, n_embeddings, 1)[-1]
-        o = self.esm(x, decoder_input_ids=x).last_hidden_state
-        o = self.esm_fc(o)
+        #o = #tf.split(x, n_embeddings, 1)[-1]
+        #o = self.esm(x, decoder_input_ids=x).last_hidden_state
+        o = self.esm_fc(x)
         outputs = self.layer([x, o])
         self.model = Model(inputs=x, outputs=outputs)
         self.optimizer = tf.keras.optimizers.Adam(1e-5)#CustomSchedule(dim))#, weight_decay=1e-5)

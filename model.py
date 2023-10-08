@@ -101,6 +101,7 @@ class ACP2RetNet(Layer):
           if self.elbo(x) > max(list(map(lambda val: val.deref().numpy(),
                                          self.state.keys()))): 
               self.state[self.elbo(x).ref()] = x
+              print(self.elbo(x))
       x = self.final_layer(x)
       return x
 
