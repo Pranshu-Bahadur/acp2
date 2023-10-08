@@ -11,7 +11,7 @@ class ACP2HyperModel(kt.HyperModel):
     test_text,
     test_label,
     vocab,
-    dims : list = [32*4],
+    dims : list = [512*4],
     hdim : list = [768//4],
                  ):
       super().__init__()
@@ -37,7 +37,7 @@ class ACP2HyperModel(kt.HyperModel):
         dropout = hp.Choice('dropout', [0.2, 0.3])
         n_layers_2 = hp.Choice('n_layers_2', [1, 2, 4])
         nheads = 4
-        n_embeddings = 3
+        n_embeddings = 1
         seq_len = self.seq_len
         
         self.tokenizers = [

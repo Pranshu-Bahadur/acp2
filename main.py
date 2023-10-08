@@ -37,7 +37,7 @@ tuner = kt.BayesianOptimization(ACP2HyperModel(
     objective='val_binary_accuracy',
     max_trials=20,
     directory='my_dir_3',
-    project_name='3DD3_V3.33$$')
+    project_name='3DD3_V3.33$$$4554')
 
 tuner.search(epochs=1000, batch_size=32, shuffle=True)
 
